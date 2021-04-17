@@ -6,7 +6,7 @@
 #############################################################################
 
 # install.packages("pacman")
-pacman::p_load(shiny, tidyverse, tidymodels)
+pacman::p_load(shiny, tidyverse, tidymodels, shinythemes)
 
 source('UI.R', local = TRUE)
 source('Server.R')
