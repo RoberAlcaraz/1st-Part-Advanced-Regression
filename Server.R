@@ -7,7 +7,9 @@
 ################################################################################
 
 # install.packages("pacman")
-pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes)
+pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes, emo)
+# devtools::install_github("hadley/emo")
+
 # Today, 17/04/2021, we are going to load the COVID data from Spain. We will 
 # work on this data set and we will fit the model until this time. The following
 # days will be used to test the data.

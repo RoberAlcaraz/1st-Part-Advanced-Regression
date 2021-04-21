@@ -6,7 +6,8 @@
 # UI FUNCTION
 ################################################################################
 
-pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes)
+pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes, emo)
+# devtools::install_github("hadley/emo")
 
 refPanel <- tabPanel(
   "References",
