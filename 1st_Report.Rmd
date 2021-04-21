@@ -17,17 +17,21 @@ header-includes:
 - \usepackage{graphicx}
 - \usepackage{subfig}
 - \usepackage{booktabs}
+bibliography: references.bib
 ---
 
-
+```{=tex}
 \begin{center}
 \includegraphics[width=3in]{logouc3m}
 \end{center}
-
+```
 \newpage
 
 ```{r, echo = F}
-pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes)
+pacman::p_load(COVID19, tidyverse, tidymodels)
+
+# spain <- COVID19::covid19(country = "spain")
+# saveRDS(spain, "spain.RDS")
 ```
 
 ```{r include=FALSE}
@@ -41,6 +45,67 @@ knitr::opts_chunk$set(warning = FALSE,
                       cache=FALSE, error = TRUE)
 ```
 
+# Introduction
 
-# Introduction and data cleaning
+The aim of this project is to analyze the coronavirus pandemic (COVID-19) in Spain. The data has been taken from the R package `COVID19` [@guidotti2020].
 
+```{r}
+spain <- readRDS("spain.RDS")
+```
+
+# Data Cleaning 
+
+https://covid19datahub.io/articles/doc/data.html
+
+The Spain COVID-19 data set contains 451 observations, which are the days from the 22nd of January 2020 until now, and 36 variables divided in 5 categories: *identifiers*, *COVID-19 variables*, *policy measures*, *geographic information* and *external keys*.
+
+Regarding the *identifiers*, since we will only analyze Spain, we will remove the variable `id`, which denote the country, and will select the `date`.
+
+In the second group, we have variables related with the COVID-19 such as the cumulative number of `deaths`, `confirmed` cases, `test`, etc.
+
+```{r}
+spain %>%
+  select(-id)
+```
+
+
+
+### Identifiers:
+- `id`:
+- `date`:
+
+### COVID-19 variables:
+- `deaths`:
+- `confirmed`:
+- `test`:
+- `vaccines`:
+- `recovered`:
+- `hosp`:
+- `icu`:
+- `vent`:
+- `population`:
+
+### Policy measures:
+- `school_closing`:
+- `workplace_closing`:
+- `cancel_events`:
+- `transport_closing`:
+- `stay_home_restrictions`:
+
+
+```{r}
+
+```
+
+
+
+# Exploratoy Data Analysis (EDA)
+
+
+# Feature Engineering 
+
+
+# Model tuning and selection
+
+
+# References
