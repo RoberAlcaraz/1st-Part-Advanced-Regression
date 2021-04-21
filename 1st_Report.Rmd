@@ -30,8 +30,17 @@ bibliography: references.bib
 ```{r, echo = F}
 pacman::p_load(COVID19, tidyverse, tidymodels)
 
-# spain <- COVID19::covid19(country = "spain")
-# saveRDS(spain, "spain.RDS")
+# spain <- COVID19::covid19(country = "spain", start = "2020-01-22", end = "2021-04-16")
+# 
+# clm <- COVID19::covid19(country = "spain", level = 2, start = "2020-01-22", end = "2021-04-16") %>% 
+#   filter(administrative_area_level_2 == "Castilla-La Mancha")
+# 
+# madrid <- COVID19::covid19(country = "spain", level = 2, start = "2020-01-22", end = "2021-04-16") %>% 
+#   filter(administrative_area_level_2 == "Comunidad de Madrid")
+
+saveRDS(spain, "spain.RDS")
+saveRDS(clm, "clm.RDS")
+saveRDS(madrid, "madrid.RDS")
 ```
 
 ```{r include=FALSE}
@@ -47,25 +56,43 @@ knitr::opts_chunk$set(warning = FALSE,
 
 # Introduction
 
-The aim of this project is to analyze the coronavirus pandemic (COVID-19) in Spain. The data has been taken from the R package `COVID19` [@guidotti2020].
+The aim of this project is to analyze the coronavirus pandemic (COVID-19) in Spain in general, and in Castilla-La Mancha and Comunidad de Madrid regions, in particular, in order to see what would have happened if policy measures had been taken before. The data has been taken from the R package `COVID19` [@guidotti2020].
 
 ```{r}
 spain <- readRDS("spain.RDS")
+clm <- readRDS("clm.RDS")
+madrid <- readRDS("madrid.RDS")
 ```
 
 # Data Cleaning 
 
 https://covid19datahub.io/articles/doc/data.html
 
-The Spain COVID-19 data set contains 451 observations, which are the days from the 22nd of January 2020 until now, and 36 variables divided in 5 categories: *identifiers*, *COVID-19 variables*, *policy measures*, *geographic information* and *external keys*.
+These three COVID-19 data sets contain 451 observations, which are the days from the 22nd of January 2020 until the 16th of March 2021, and 36 and 38 variables for Spain and the regions respectively, divided in 5 categories: *identifiers*, *COVID-19 variables*, *policy measures*, *geographic information* and *external keys*.
 
-Regarding the *identifiers*, since we will only analyze Spain, we will remove the variable `id`, which denote the country, and will select the `date`.
-
-In the second group, we have variables related with the COVID-19 such as the cumulative number of `deaths`, `confirmed` cases, `test`, etc.
+Regarding the *identifiers*, we will select both variables: `id`, which denote the country or the region, and `date`. In the second group, we have variables related with the *COVID-19* such as the cumulative number of `deaths`, `confirmed` cases, `test`, etc. For the moment, we will select all of them and then we will decide. In the *policy measures*, we have very important variables for the development of the pandemic and for our study, like `workplace_closing`, `stay_home_restrictions` or `internal_movement_restrictions`, so we must take them into account. Finally, there are other geographical variables that could be interesting for our models.
 
 ```{r}
-spain %>%
-  select(-id)
+# Transform the id
+clm$id    <- clm$key 
+madrid$id <- madrid$key
+
+# Tranform the latitude and longitude
+clm$latitude <- 39
+clm$longitude <- -3
+madrid$latitude <- 40
+madrid$longitude <- -4
+```
+
+```{r}
+spain <- spain %>%
+  select(id, date, deaths, confirmed, tests, vaccines, recovered, hosp, icu, vent, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions, testing_policy, population, latitude, longitude)
+
+clm <- clm %>%
+  select(id, date, deaths, confirmed, tests, vaccines, recovered, hosp, icu, vent, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions, testing_policy, population, latitude, longitude)
+
+madrid <- madrid %>%
+  select(id, date, deaths, confirmed, tests, vaccines, recovered, hosp, icu, vent, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions, testing_policy, population, latitude, longitude)
 ```
 
 
@@ -74,23 +101,7 @@ spain %>%
 - `id`:
 - `date`:
 
-### COVID-19 variables:
-- `deaths`:
-- `confirmed`:
-- `test`:
-- `vaccines`:
-- `recovered`:
-- `hosp`:
-- `icu`:
-- `vent`:
-- `population`:
 
-### Policy measures:
-- `school_closing`:
-- `workplace_closing`:
-- `cancel_events`:
-- `transport_closing`:
-- `stay_home_restrictions`:
 
 
 ```{r}
