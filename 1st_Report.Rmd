@@ -28,7 +28,7 @@ bibliography: references.bib
 \newpage
 
 ```{r, echo = F}
-pacman::p_load(COVID19, tidyverse, tidymodels, workflows, tune, patchwork)
+pacman::p_load(COVID19, tidyverse, tidymodels, workflows, tune, patchwork, lubridate)
 theme_set(theme_bw())
 
 # spain <- COVID19::covid19(country = "spain", start = "2020-01-22", end = "2021-04-16")
@@ -48,7 +48,7 @@ theme_set(theme_bw())
 knitr::opts_chunk$set(warning = FALSE, 
                       echo = F, 
                       message = FALSE,
-                      eval = F,
+                      eval = T,
                       fig.pos="H", 
                       fig.align="center",
                       fig.width=15,
@@ -61,8 +61,8 @@ The aim of this project is to analyze the coronavirus pandemic (COVID-19) in Spa
 
 ```{r}
 spain <- readRDS("spain.RDS")
-clm <- readRDS("clm.RDS")
-madrid <- readRDS("madrid.RDS")
+# clm <- readRDS("clm.RDS")
+# madrid <- readRDS("madrid.RDS")
 ```
 
 # Data Cleaning
@@ -74,12 +74,13 @@ These three COVID-19 data sets contain 451 observations, which are the days from
 Regarding the identifiers, we will select both variables: `id`, which denote the country or the region, and date. In the second group, we have variables related with the COVID-19 such as the cumulative number of deaths, confirmed cases, test, etc. For the moment, we will select all of them and then we will decide. In the policy measures, we have very important variables for the development of the pandemic and for our study, like workplace_closing, stay_home_restrictions or internal_movement_restrictions, so we must take them into account. Finally, there are other geographical variables that could be interesting for our models. A description of our variables can be seen below:
 
 ```{r}
+population <- spain$population
 spain <- spain %>%
   select(id, date, deaths, confirmed, tests, vaccines, hosp, icu, population, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions)
 ```
 
 | **Variable**                     | **Description**                                          |
-|:--------------------------------:|----------------------------------------------------------|
+|:---------------------------------|----------------------------------------------------------|
 | `id`                             | Unique identifier.                                       |
 | `date`                           | Observation date.                                        |
 | `deaths`                         | Cumulative number of deaths.                             |
@@ -137,7 +138,7 @@ spain <- spain %>%
                                levels = c(0, 1, 2),
                                labels = c("no", "recommended", "mandatory")),
   ) %>%
-  select(- c(stay_home_restrictions, -internal_movement_restrictions))
+  select(-stay_home_restrictions, -internal_movement_restrictions)
 ```
 
 After these changes, in the next section we will perform some visualizations to know the distributions of the variables, relationship between them, etc.
@@ -197,9 +198,157 @@ c <- spain %>%
 a + b + c
 ```
 
-Due to the missing values, we have discontinuous plots. Therefore, we need a method to impute those missing values.
+Due to the missing values, we have discontinuous plots. These missing values appear because there are some places in Spain where the vaccination is stopped on weekends, or because these data is not recorded on weekends. Therefore, we will need a statistical method to impute these values, which will be done in the next section. 
+
+Then, we are going to see the relationships between our target variables, deaths and confirmed, and some of the categorical predictors. Below, we can see how predictors like `stay_home`, `workplace_closing`, `gatherings_restrictions` and `internal_movement` are related with the confirmed cases:
+
+```{r}
+a <- spain %>%
+  ggplot(aes(x = date, y = confirmed, color = stay_home)) +
+  labs(y = " ", x = "") +
+  ggtitle("Confirmed cases") +
+  theme(
+    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
+    ) + 
+  geom_point()
+
+b <- spain %>%
+  ggplot(aes(x = date, y = confirmed, color = workplace_closing)) +
+  labs(y = " ") +
+  theme(
+    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
+    ) + 
+  geom_point()
+
+c <- spain %>%
+  ggplot(aes(x = date, y = confirmed, color = gatherings_restrictions)) +
+  labs(y = " ", x = "") +
+  theme(
+    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
+    ) + 
+  geom_point()
+
+d <- spain %>%
+  ggplot(aes(x = date, y = confirmed, color = internal_movement)) +
+  labs(y = " ") +
+  theme(
+    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
+    ) + 
+  geom_point()
+
+(a / b) | (c / d)
+```
+
+The first plot in the top left corner shows us that the variable `stay_home` is wrongly collected, since it was not mandatory to stay at home after the summer, so we must change it. Also, we can observe how after the summer the measures were much more restrictives than during the summer because of the increment of new cases. For the cummulative deaths, we can see it below: 
+
+```{r}
+a <- spain %>%
+  ggplot(aes(x = date, y = deaths, color = stay_home)) +
+  labs(y = " ", x = "") +
+  ggtitle("Deaths") +
+  theme(
+    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
+    ) + 
+  geom_point()
+
+b <- spain %>%
+  ggplot(aes(x = date, y = deaths, color = workplace_closing)) +
+  labs(y = " ") +
+  theme(
+    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
+    ) + 
+  geom_point()
+
+c <- spain %>%
+  ggplot(aes(x = date, y = deaths, color = gatherings_restrictions)) +
+  labs(y = " ", x = "") +
+  theme(
+    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
+    ) + 
+  geom_point()
+
+d <- spain %>%
+  ggplot(aes(x = date, y = deaths, color = internal_movement)) +
+  labs(y = " ") +
+  theme(
+    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
+    ) + 
+  geom_point()
+
+(a / b) | (c / d)
+```
+
+Again, after summer the measures become more agressive due to the new cases. In the following section, we will see how to modify some variables after we have more knowledge about them.
 
 # Feature Engineering
+
+```{r}
+spain_new_data <- COVID19::covid19(country = "spain", start = "2021-04-17")
+```
+
+In this section, based on the previous analysis of the variables, we should decide which changes should be done in our model, which are usually called **preprocessing** steps. Our preprocessing steps will be:
+
+1. Divide the date in day, month and year, since the month and the year could be very important in the outcomes.
+2. Since our target variables are accumulated, we will consider the deaths and confirmed cases on each day and they will be divided by the total population and multiplied by 100000, to get the variables `deaths_100k` and `confirmed_100k`, i.e., the deaths and confirmed cases by 100k inhabitants on each day. 
+
+
+```{r}
+spain <- spain %>% 
+  mutate(
+    month = as.factor(month(date)),
+    year = as.factor(year(date))
+  )
+
+deaths_day <- (spain$deaths - lag(spain$deaths))[-1]
+confirmed_day <- (spain$confirmed - lag(spain$confirmed))[-1]
+spain <- spain[-1, ]
+
+spain <- spain %>%
+  mutate(
+    deaths_acc = deaths,
+    confirmed_acc = confirmed,
+    deaths = deaths_day,
+    confirmed = confirmed_day
+  )
+
+spain <- spain %>%
+  mutate(
+    deaths_100k = (deaths*100000)/population,
+    confirmed_100k = (confirmed*100000)/population
+  )
+
+spain %>%
+  ggplot(aes(x = date, y = deaths_100k)) +
+  geom_line()
+spain %>%
+  ggplot(aes(x = date, y = confirmed)) +
+  geom_line()
+```
+
+
+```{r}
+
+
+spain <- spain %>%
+  mutate(
+    deathsLag1 = lag(deaths)
+  )
+spain <- spain[-1, ]
+
+mod1 <- lm(deaths ~ deathsLag1 + month + year + , data = spain)
+
+spain %>%
+  ggplot(aes(x = date, y = deaths)) +
+  geom_line() + 
+  geom_line(y = predict(mod1), color = "red")
+  
+ggplot(data, aes(x=Date, y=CO2)) +
+  geom_line(color="red", size=1.2) + 
+  stat_smooth(method="lm", formula=y ~ x, se=FALSE, col="black") +
+  theme_minimal()
+```
+
+
 
 # Model tuning and selection
 
