@@ -38,9 +38,9 @@ pacman::p_load(COVID19, tidyverse, tidymodels)
 # madrid <- COVID19::covid19(country = "spain", level = 2, start = "2020-01-22", end = "2021-04-16") %>% 
 #   filter(administrative_area_level_2 == "Comunidad de Madrid")
 
-saveRDS(spain, "spain.RDS")
-saveRDS(clm, "clm.RDS")
-saveRDS(madrid, "madrid.RDS")
+# saveRDS(spain, "spain.RDS")
+# saveRDS(clm, "clm.RDS")
+# saveRDS(madrid, "madrid.RDS")
 ```
 
 ```{r include=FALSE}
@@ -64,59 +64,189 @@ clm <- readRDS("clm.RDS")
 madrid <- readRDS("madrid.RDS")
 ```
 
-# Data Cleaning 
+# Data Cleaning
 
-https://covid19datahub.io/articles/doc/data.html
+<https://covid19datahub.io/articles/doc/data.html>
 
 These three COVID-19 data sets contain 451 observations, which are the days from the 22nd of January 2020 until the 16th of March 2021, and 36 and 38 variables for Spain and the regions respectively, divided in 5 categories: *identifiers*, *COVID-19 variables*, *policy measures*, *geographic information* and *external keys*.
 
-Regarding the *identifiers*, we will select both variables: `id`, which denote the country or the region, and `date`. In the second group, we have variables related with the *COVID-19* such as the cumulative number of `deaths`, `confirmed` cases, `test`, etc. For the moment, we will select all of them and then we will decide. In the *policy measures*, we have very important variables for the development of the pandemic and for our study, like `workplace_closing`, `stay_home_restrictions` or `internal_movement_restrictions`, so we must take them into account. Finally, there are other geographical variables that could be interesting for our models.
+Regarding the identifiers, we will select both variables: `id`, which denote the country or the region, and date. In the second group, we have variables related with the COVID-19 such as the cumulative number of deaths, confirmed cases, test, etc. For the moment, we will select all of them and then we will decide. In the policy measures, we have very important variables for the development of the pandemic and for our study, like workplace_closing, stay_home_restrictions or internal_movement_restrictions, so we must take them into account. Finally, there are other geographical variables that could be interesting for our models. A description of our variables can be seen below:
 
 ```{r}
 # Transform the id
 clm$id    <- clm$key 
 madrid$id <- madrid$key
-
-# Tranform the latitude and longitude
-clm$latitude <- 39
-clm$longitude <- -3
-madrid$latitude <- 40
-madrid$longitude <- -4
 ```
 
 ```{r}
 spain <- spain %>%
-  select(id, date, deaths, confirmed, tests, vaccines, recovered, hosp, icu, vent, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions, testing_policy, population, latitude, longitude)
+  select(id, date, deaths, confirmed, tests, vaccines, hosp, icu, population, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions)
 
 clm <- clm %>%
-  select(id, date, deaths, confirmed, tests, vaccines, recovered, hosp, icu, vent, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions, testing_policy, population, latitude, longitude)
+  select(id, date, deaths, confirmed, tests, vaccines, hosp, icu, population, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions)
 
 madrid <- madrid %>%
-  select(id, date, deaths, confirmed, tests, vaccines, recovered, hosp, icu, vent, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions, testing_policy, population, latitude, longitude)
+  select(id, date, deaths, confirmed, tests, vaccines, hosp, icu, population, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions)
+```
+
+| **Variable**                           | **Description**                                              |
+|----------------------------------------|--------------------------------------------------------------|
+|`id`                                    | Unique identifier.                                           |
+|`date`                                  | Observation date.                                            |
+|`deaths`                                | Cumulative number of deaths.                                 |
+|`confirmed`                             | Cumulative number of confirmed cases.                        |
+|`tests`                                 | Cumulative number of tests.                                  |
+|`vaccines`                              | Cumulative number of doses administered (single dose).       |
+|`hosp`                                  | Number of hospitalized patients on date.                     |
+|`icu`                                   | Number of hospitalized patients in ICUs on date.             |
+|`population`                            | Total population.                                            |
+|`stay_home_restrictions`                | Indicates the measures of staying at home.                   |
+|`school_closing`                        | Indicates the measures in education.                         |
+|`workplace_closing`                     | Indicates the measures of the workplace.                     |
+|`transport_closing`                     | Indicates the measures in the public transport.              |
+|`gatherings_restrictions`               | Indicates the measures of gatherings.                        |
+|`internal_movement_restrictions`        | Indicates the measures of the movements between regions.     |                                                
+           
+We have realized that all numerical variables have **missing values**. Some of them like the deaths or confirmed cases have them at the beginning, but we have no problem with that because that means that there were not cases at that time, so we will give 0 to these values. However, there are other variables for which we have to think what to do with their missing values very carefully. For instance, for the tests, there are 399 missing values out of 451 observations, so we will remove it because there is no much information. For the vaccines, we have 378, which we might expect that since the first day we had vaccines was the 4th of January of 2021 but also, we have some of them in the weekends. For the number of hospitalized people and the ICU people, we have again 303 NAs, but for the moment they will remain in the data set. How to deal with them will be seen in next sections. Finally, the variables for the measures do not have any missing value.
+
+```{r}
+spain <- spain %>%
+  mutate(
+    deaths = replace(deaths, is.na(deaths), 0),
+    confirmed = replace(confirmed, is.na(confirmed), 0)
+  )
+
+madrid <- madrid %>%
+  mutate(
+    deaths = replace(deaths, is.na(deaths), 0),
+    confirmed = replace(confirmed, is.na(confirmed), 0)
+  )
+
+clm <- clm %>%
+  mutate(
+    deaths = replace(deaths, is.na(deaths), 0),
+    confirmed = replace(confirmed, is.na(confirmed), 0)
+  )
 ```
 
 
 
-### Identifiers:
-- `id`:
-- `date`:
+After that, we should modify our categorical variables, since they are encoded as integers. The first one, `stay_home_restrictions`, will have three categories: no measures, require not leaving house with exceptions (exercise) and not leaving the house. The next one, `school_closing` has another four categories: no measures, recommended closing, require closing for some schools and require closing. For `workplace_closing` we have no measures, recommended closing, require closing for some sectors and require closing. For `transport_closing` we have two levels: no measures and recommended closing. For `gatherings_restrictions`: no measures, restrictions between 10-100 people and restrictions on gatherings of less than 10 people. Finally, the variable `internal_movement_restrictions` has no measures, recommend closing or require closing.
 
+```{r}
+# For Spain
+spain <- spain %>%
+  mutate(
+    stay_home = factor(stay_home_restrictions, 
+                       levels = c(0, 1, 2),
+                       labels = c("no", "recommended", "mandatory")),
+    
+    school_closing = factor(school_closing, 
+                            levels = c(0, 1, 2, 3),
+                            labels = c("no", "recommended", "require", "mandatory")),
+    
+    workplace_closing = factor(workplace_closing, 
+                               levels = c(0, 1, 2, 3),
+                               labels = c("no", "recommended", "require", "mandatory")),
+    
+    transport_closing = factor(transport_closing, 
+                               levels = c(0, 1),
+                               labels = c("no", "recommended")),
+    
+    gatherings_restrictions = factor(gatherings_restrictions, 
+                                     levels = c(0, 1, 2, 3, 4),
+                                     labels = c("no", "no", "no", "10-100", "<10")),
+    
+    internal_movement = factor(internal_movement_restrictions, 
+                               levels = c(0, 1, 2),
+                               labels = c("no", "recommended", "mandatory")),
+  ) %>%
+  select(- c(stay_home_restrictions, -internal_movement_restrictions))
+```
 
+```{r}
+# For CLM
+clm <- clm %>%
+  
+  mutate(
+    
+    stay_home = replace(stay_home_restrictions, is.na(stay_home_restrictions), 0),
+    stay_home = factor(stay_home, 
+                       levels = c(0, 1, 2),
+                       labels = c("no", "recommended", "mandatory")),
+    
+    school_closing = replace(school_closing, is.na(school_closing), 0),
+    school_closing = factor(school_closing, 
+                            levels = c(0, 1, 2, 3),
+                            labels = c("no", "recommended", "require", "mandatory")),
+    
+    workplace_closing = replace(workplace_closing, is.na(workplace_closing), 0),
+    workplace_closing = factor(workplace_closing, 
+                               levels = c(0, 1, 2, 3),
+                               labels = c("no", "recommended", "require", "mandatory")),
+    
+    transport_closing = replace(transport_closing, is.na(transport_closing), 0),
+    transport_closing = factor(transport_closing, 
+                               levels = c(0, 1),
+                               labels = c("no", "recommended")),
+    
+    gatherings_restrictions = replace(gatherings_restrictions, is.na(gatherings_restrictions), 0),
+    gatherings_restrictions = factor(gatherings_restrictions, 
+                                     levels = c(0, 3, 4),
+                                     labels = c("no", "10-100", "<10")),
+    
+    internal_movement = replace(internal_movement_restrictions, is.na(internal_movement_restrictions), 0),
+    internal_movement = factor(internal_movement, 
+                               levels = c(0, 1, 2),
+                               labels = c("no", "recommended", "mandatory")),
+  ) %>%
+  select(- c(stay_home_restrictions, -internal_movement_restrictions))
+```
 
 
 ```{r}
-
+# For Madrid
+madrid <- madrid %>%
+  
+  mutate(
+    
+    stay_home = replace(stay_home_restrictions, is.na(stay_home_restrictions), 0),
+    stay_home = factor(stay_home, 
+                       levels = c(0, 1, 2),
+                       labels = c("no", "recommended", "mandatory")),
+    
+    school_closing = replace(school_closing, is.na(school_closing), 0),
+    school_closing = factor(school_closing, 
+                            levels = c(0, 1, 2, 3),
+                            labels = c("no", "recommended", "require", "mandatory")),
+    
+    workplace_closing = replace(workplace_closing, is.na(workplace_closing), 0),
+    workplace_closing = factor(workplace_closing, 
+                               levels = c(0, 1, 2, 3),
+                               labels = c("no", "recommended", "require", "mandatory")),
+    
+    transport_closing = replace(transport_closing, is.na(transport_closing), 0),
+    transport_closing = factor(transport_closing, 
+                               levels = c(0, 1),
+                               labels = c("no", "recommended")),
+    
+    gatherings_restrictions = replace(gatherings_restrictions, is.na(gatherings_restrictions), 0),
+    gatherings_restrictions = factor(gatherings_restrictions, 
+                                     levels = c(0, 3, 4),
+                                     labels = c("no", "10-100", "<10")),
+    
+    internal_movement = replace(internal_movement_restrictions, is.na(internal_movement_restrictions), 0),
+    internal_movement = factor(internal_movement, 
+                               levels = c(0, 1, 2),
+                               labels = c("no", "recommended", "mandatory")),
+  ) %>%
+  select(- c(stay_home_restrictions, -internal_movement_restrictions))
 ```
-
-
 
 # Exploratoy Data Analysis (EDA)
 
-
-# Feature Engineering 
-
+# Feature Engineering
 
 # Model tuning and selection
-
 
 # References
