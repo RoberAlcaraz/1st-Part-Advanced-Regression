@@ -29,6 +29,7 @@ bibliography: references.bib
 
 ```{r, echo = F}
 pacman::p_load(COVID19, tidyverse, tidymodels, workflows, tune, patchwork)
+theme_set(theme_bw())
 
 # spain <- COVID19::covid19(country = "spain", start = "2020-01-22", end = "2021-04-16")
 # 
@@ -77,24 +78,24 @@ spain <- spain %>%
   select(id, date, deaths, confirmed, tests, vaccines, hosp, icu, population, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions)
 ```
 
-| **Variable**                           | **Description**                                              |
-|----------------------------------------|--------------------------------------------------------------|
-|`id`                                    | Unique identifier.                                           |
-|`date`                                  | Observation date.                                            |
-|`deaths`                                | Cumulative number of deaths.                                 |
-|`confirmed`                             | Cumulative number of confirmed cases.                        |
-|`tests`                                 | Cumulative number of tests.                                  |
-|`vaccines`                              | Cumulative number of doses administered (single dose).       |
-|`hosp`                                  | Number of hospitalized patients on date.                     |
-|`icu`                                   | Number of hospitalized patients in ICUs on date.             |
-|`population`                            | Total population.                                            |
-|`stay_home_restrictions`                | Indicates the measures of staying at home.                   |
-|`school_closing`                        | Indicates the measures in education.                         |
-|`workplace_closing`                     | Indicates the measures of the workplace.                     |
-|`transport_closing`                     | Indicates the measures in the public transport.              |
-|`gatherings_restrictions`               | Indicates the measures of gatherings.                        |
-|`internal_movement_restrictions`        | Indicates the measures of the movements between regions.     |                                                
-           
+| **Variable**                     | **Description**                                          |
+|:--------------------------------:|----------------------------------------------------------|
+| `id`                             | Unique identifier.                                       |
+| `date`                           | Observation date.                                        |
+| `deaths`                         | Cumulative number of deaths.                             |
+| `confirmed`                      | Cumulative number of confirmed cases.                    |
+| `tests`                          | Cumulative number of tests.                              |
+| `vaccines`                       | Cumulative number of doses administered (single dose).   |
+| `hosp`                           | Number of hospitalized patients on date.                 |
+| `icu`                            | Number of hospitalized patients in ICUs on date.         |
+| `population`                     | Total population.                                        |
+| `stay_home_restrictions`         | Indicates the measures of staying at home.               |
+| `school_closing`                 | Indicates the measures in education.                     |
+| `workplace_closing`              | Indicates the measures of the workplace.                 |
+| `transport_closing`              | Indicates the measures in the public transport.          |
+| `gatherings_restrictions`        | Indicates the measures of gatherings.                    |
+| `internal_movement_restrictions` | Indicates the measures of the movements between regions. |
+
 We have realized that all numerical variables have **missing values**. Some of them like the deaths or confirmed cases have them at the beginning, but we have no problem with that because that means that there were not cases at that time, so we will give 0 to these values. However, there are other variables for which we have to think what to do with their missing values very carefully. For instance, for the tests, there are 399 missing values out of 451 observations, so we will remove it because there is no much information. For the vaccines, we have 378, which we might expect that since the first day we had vaccines was the 4th of January of 2021 but also, we have some of them in the weekends. For the number of hospitalized people and the ICU people, we have again 303 NAs, but for the moment they will remain in the data set. How to deal with them will be seen in next sections. Finally, the variables for the measures do not have any missing value.
 
 ```{r}
@@ -102,22 +103,9 @@ spain <- spain %>%
   mutate(
     deaths = replace(deaths, is.na(deaths), 0),
     confirmed = replace(confirmed, is.na(confirmed), 0)
-  )
-
-madrid <- madrid %>%
-  mutate(
-    deaths = replace(deaths, is.na(deaths), 0),
-    confirmed = replace(confirmed, is.na(confirmed), 0)
-  )
-
-clm <- clm %>%
-  mutate(
-    deaths = replace(deaths, is.na(deaths), 0),
-    confirmed = replace(confirmed, is.na(confirmed), 0)
-  )
+  ) %>%
+  select(-tests)
 ```
-
-
 
 After that, we should modify our categorical variables, since they are encoded as integers. The first one, `stay_home_restrictions`, will have three categories: no measures, require not leaving house with exceptions (exercise) and not leaving the house. The next one, `school_closing` has another four categories: no measures, recommended closing, require closing for some schools and require closing. For `workplace_closing` we have no measures, recommended closing, require closing for some sectors and require closing. For `transport_closing` we have two levels: no measures and recommended closing. For `gatherings_restrictions`: no measures, restrictions between 10-100 people and restrictions on gatherings of less than 10 people. Finally, the variable `internal_movement_restrictions` has no measures, recommend closing or require closing.
 
@@ -152,29 +140,64 @@ spain <- spain %>%
   select(- c(stay_home_restrictions, -internal_movement_restrictions))
 ```
 
-
-After these changes, in the next section we will perform some visualizations to know the distributions of the variables, relationship between them, etc. 
+After these changes, in the next section we will perform some visualizations to know the distributions of the variables, relationship between them, etc.
 
 # Exploratoy Data Analysis (EDA)
 
-```{r}
+Our two main variables of interest are cumulative `deaths` and `confirmed` cases. First of all, let's see how they are distributed.
+
+```{r, fig.cap="Cumulative deaths and confirmed cases in Spain"}
 a <- spain %>%
   ggplot(aes(x = date, y = deaths)) +
   geom_line()
 
-b <- madrid %>%
-  ggplot(aes(x = date, y = deaths)) +
+b <- spain %>%
+  ggplot(aes(x = date, y = confirmed)) +
   geom_line()
 
-c <- clm %>%
-  ggplot(aes(x = date, y = deaths)) +
-  geom_line()
-
-a / b / c
+a + b 
 ```
 
+As we can observe, there are some mistakes in the data: in the cumulative deaths, there is a drop around June, and in the cumulative confirmed cases, there is another drop in February, which do not make any sense since we are considering **cumulative** cases. Therefore, to fix that error, we will give to that day the value for the previous days in all days that are in that descent.
 
+```{r}
+for (i in 1:(nrow(spain)-1)){
+  if (spain$deaths[i+1] < spain$deaths[i]) spain$deaths[i+1] <- spain$deaths[i]
+  if (spain$confirmed[i+1] < spain$confirmed[i]) spain$confirmed[i+1] <- spain$confirmed[i]
+}
+```
 
+```{r, fig.cap="Cumulative deaths and confirmed cases fixed"}
+a <- spain %>%
+  ggplot(aes(x = date, y = deaths)) +
+  geom_line()
+
+b <- spain %>%
+  ggplot(aes(x = date, y = confirmed)) +
+  geom_line()
+
+a + b 
+```
+
+Now let's focus on the vaccines administered and the hospitalized people:
+
+```{r}
+a <- spain %>%
+  ggplot(aes(x = date, y = vaccines)) +
+  geom_line()
+
+b <- spain %>%
+  ggplot(aes(x = date, y = hosp)) +
+  geom_line()
+
+c <- spain %>%
+  ggplot(aes(x = date, y = icu)) +
+  geom_line()
+
+a + b + c
+```
+
+Due to the missing values, we have discontinuous plots. Therefore, we need a method to impute those missing values.
 
 # Feature Engineering
 
