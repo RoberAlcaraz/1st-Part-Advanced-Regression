@@ -31,7 +31,7 @@ bibliography: references.bib
 pacman::p_load(COVID19, tidyverse, tidymodels, workflows, tune, patchwork, lubridate)
 theme_set(theme_bw())
 
-# spain <- COVID19::covid19(country = "spain", start = "2020-01-22", end = "2021-04-16")
+# spain <- COVID19::covid19(country = "spain", start = "2020-01-22", end = "2021-04-11")
 # 
 # clm <- COVID19::covid19(country = "spain", level = 2, start = "2020-01-22", end = "2021-04-16") %>% 
 #   filter(administrative_area_level_2 == "Castilla-La Mancha")
@@ -69,7 +69,7 @@ spain <- readRDS("spain.RDS")
 
 <https://covid19datahub.io/articles/doc/data.html>
 
-These three COVID-19 data sets contain 451 observations, which are the days from the 22nd of January 2020 until the 16th of March 2021, and 36 and 38 variables for Spain and the regions respectively, divided in 5 categories: *identifiers*, *COVID-19 variables*, *policy measures*, *geographic information* and *external keys*.
+These three COVID-19 data sets contain 446 observations, which are the days from the 22nd of January 2020 until the 11th of March 2021, and 36 and 38 variables for Spain and the regions respectively, divided in 5 categories: *identifiers*, *COVID-19 variables*, *policy measures*, *geographic information* and *external keys*.
 
 Regarding the identifiers, we will select both variables: `id`, which denote the country or the region, and date. In the second group, we have variables related with the COVID-19 such as the cumulative number of deaths, confirmed cases, test, etc. For the moment, we will select all of them and then we will decide. In the policy measures, we have very important variables for the development of the pandemic and for our study, like `workplace_closing`, `stay_home_restrictions` or `internal_movement_restrictions`, so we must take them into account. Finally, there are other geographical variables that could be interesting for our models. A description of our variables can be seen below:
 
@@ -78,9 +78,10 @@ skimr::skim(spain)
 ```
 
 ```{r}
-population <- spain$population
+population <- spain$population[1]
 spain <- spain %>%
-  select(id, date, deaths, confirmed, vaccines, hosp, icu, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions)
+  select(date, deaths, confirmed, vaccines, hosp, icu, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions)
+spain <- spain[, -1]
 
 skimr::skim(spain)
 ```
@@ -297,6 +298,34 @@ Again, after summer the measures become more agressive due to the new cases. In 
 # Feature Engineering
 
 ```{r}
+calculate_mode <- function(x) {
+  uniqx <- unique(x)
+  uniqx[which.max(tabulate(match(x, uniqx)))]
+}
+
+spain <- spain %>%
+  mutate(
+    new_date = as.Date(cut(date, "week"))
+  ) %>%
+  group_by(new_date) %>%
+  mutate(
+    deaths = sum(deaths),
+    confirmed = sum(confirmed),
+    vaccines = sum(vaccines),
+    hosp = sum(hosp),
+    school_closing = calculate_mode(school_closing),
+    workplace_closing = calculate_mode(workplace_closing),
+    gatherings_restrictions = calculate_mode(gatherings_restrictions),
+    stay_home = calculate_mode(stay_home),
+    internal_movement = calculate_mode(internal_movement)
+  ) %>%
+  ungroup() %>%
+  filter(date %in% new_date)
+skimr::skim(spain)
+```
+
+
+```{r}
 spain_new_data <- COVID19::covid19(country = "spain", start = "2021-04-16")
 skimr::skim(spain)
 ```
@@ -364,6 +393,11 @@ spain %>%
   ggplot(aes(x = date, y = deaths)) +
   geom_line() + 
   geom_line(y = predictions, color = "red")
+```
+
+
+```{r}
+
 ```
 
 
