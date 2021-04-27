@@ -252,7 +252,7 @@ d <- spain %>%
 The first plot in the top left corner shows us that the variable `stay_home` is wrongly collected, since it was not mandatory to stay at home after the summer, so we must change it. Also, we can observe how after the summer the measures were much more restrictives than during the summer because of the increment of new cases. For the cummulative deaths, we can see it below: 
 
 ```{r}
-spain$stay_home[278:451] <- "recommended"
+spain$stay_home[278:446] <- "recommended"
 ```
 
 
@@ -321,12 +321,28 @@ spain <- spain %>%
   ) %>%
   ungroup() %>%
   filter(date %in% new_date)
-skimr::skim(spain)
+
+deaths_week <- (spain$deaths - lag(spain$deaths))[-1]
+confirmed_week <- (spain$confirmed - lag(spain$confirmed))[-1]
+
+spain <- spain[-1, ] %>%
+  mutate(
+    deaths_week = deaths_week,
+    confirmed_week = confirmed_week
+  )
+
+spain %>%
+  ggplot(aes(x = date, y = deaths_week)) +
+  geom_line()
+
+spain %>%
+  ggplot(aes(x = date, y = confirmed_week)) +
+  geom_line()
 ```
 
 
 ```{r}
-spain_new_data <- COVID19::covid19(country = "spain", start = "2021-04-16")
+spain_new_data <- COVID19::covid19(country = "spain", start = "2021-04-12")
 skimr::skim(spain)
 ```
 
@@ -343,8 +359,8 @@ In this section, based on the previous analysis of the variables, we should deci
 # 1st Step:
 spain <- spain %>% 
   mutate(
-    month = as.factor(month(date)),
-    year = as.factor(year(date))
+    month = as.factor(month(new_date)),
+    year = as.factor(year(new_date))
   )
 
 spain_new_data <- spain_new_data %>% 
@@ -356,18 +372,19 @@ spain_new_data <- spain_new_data %>%
 # 2nd Step:
 spain <- spain %>%
   mutate(
-    lag_1_deaths = lag(deaths),
-    lag_1_confirmed = lag(confirmed)
+    lag_1_deaths_week = lag(deaths_week),
+    lag_1_confirmed_week = lag(confirmed_week)
   )
 
 spain_new_data <- spain_new_data %>%
   mutate(
-    lag_1_deaths = lag(deaths),
-    lag_1_confirmed = lag(confirmed)
+    lag_1_deaths_week = lag(deaths_week),
+    lag_1_confirmed_week = lag(confirmed_week)
   )
 
 rec_deaths <-
-  recipe(deaths ~ lag_1_deaths + lag_1_confirmed + confirmed + month + year,
+  recipe(deaths_week ~ lag_1_deaths_week + lag_1_confirmed_week + confirmed_week + month + year +
+           school_closing + workplace_closing + transport_closing + gatherings_restrictions + stay_home,
          data = spain) 
 
 rec_deaths_prep <- prep(rec_deaths)
@@ -389,10 +406,29 @@ tidy(lm_fit)
 predictions <- predict(lm_fit, new_data = spain_prep)
 predictions <- predictions$.pred
 
+first_model <- spain %>%
+  mutate(
+    
+  )
+
 spain %>%
-  ggplot(aes(x = date, y = deaths)) +
+  ggplot(aes(x = date, y = deaths_week)) +
   geom_line() + 
-  geom_line(y = predictions, color = "red")
+  geom_line(y = predictions, color = "red") 
+
+first_model <- spain[-1, ] %>%
+  mutate(predictions = predictions[-1]) %>%
+  select(date, deaths_week, predictions) %>%
+  gather(key = "Variable", value = "value", -date)
+
+first_model %>%
+  ggplot(aes(x = date, y = value)) +
+  geom_line(aes(color = Variable), size = 1) +
+  scale_color_manual(values = c("darkred", "steelblue")) +
+  labs(
+    y = "Deaths per week",
+    x = "Date"
+  ) 
 ```
 
 
