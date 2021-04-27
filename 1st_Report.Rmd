@@ -357,11 +357,13 @@ lm_wflow <-
 lm_fit <- fit(lm_wflow, data = spain)
 tidy(lm_fit)
 
-predict(lm_fit, new_data = spain_prep)
+predictions <- predict(lm_fit, new_data = spain_prep)
+predictions <- predictions$.pred
 
 spain %>%
   ggplot(aes(x = date, y = deaths)) +
-  geom_line() 
+  geom_line() + 
+  geom_line(y = predictions, color = "red")
 ```
 
 
