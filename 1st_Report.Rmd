@@ -71,16 +71,18 @@ spain <- readRDS("spain.RDS")
 
 These three COVID-19 data sets contain 451 observations, which are the days from the 22nd of January 2020 until the 16th of March 2021, and 36 and 38 variables for Spain and the regions respectively, divided in 5 categories: *identifiers*, *COVID-19 variables*, *policy measures*, *geographic information* and *external keys*.
 
-Regarding the identifiers, we will select both variables: `id`, which denote the country or the region, and date. In the second group, we have variables related with the COVID-19 such as the cumulative number of deaths, confirmed cases, test, etc. For the moment, we will select all of them and then we will decide. In the policy measures, we have very important variables for the development of the pandemic and for our study, like workplace_closing, stay_home_restrictions or internal_movement_restrictions, so we must take them into account. Finally, there are other geographical variables that could be interesting for our models. A description of our variables can be seen below:
+Regarding the identifiers, we will select both variables: `id`, which denote the country or the region, and date. In the second group, we have variables related with the COVID-19 such as the cumulative number of deaths, confirmed cases, test, etc. For the moment, we will select all of them and then we will decide. In the policy measures, we have very important variables for the development of the pandemic and for our study, like `workplace_closing`, `stay_home_restrictions` or `internal_movement_restrictions`, so we must take them into account. Finally, there are other geographical variables that could be interesting for our models. A description of our variables can be seen below:
 
-```{r}
+```{r, eval=F}
 skimr::skim(spain)
 ```
 
 ```{r}
 population <- spain$population
 spain <- spain %>%
-  select(id, date, deaths, confirmed, tests, vaccines, hosp, icu, population, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions)
+  select(id, date, deaths, confirmed, vaccines, hosp, icu, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions)
+
+skimr::skim(spain)
 ```
 
 | **Variable**                     | **Description**                                          |
@@ -88,8 +90,8 @@ spain <- spain %>%
 | `id`                             | Unique identifier.                                       |
 | `date`                           | Observation date.                                        |
 | `deaths`                         | Cumulative number of deaths.                             |
+| `test`                           | Cumulative number of test.                               |
 | `confirmed`                      | Cumulative number of confirmed cases.                    |
-| `tests`                          | Cumulative number of tests.                              |
 | `vaccines`                       | Cumulative number of doses administered (single dose).   |
 | `hosp`                           | Number of hospitalized patients on date.                 |
 | `icu`                            | Number of hospitalized patients in ICUs on date.         |
@@ -101,15 +103,16 @@ spain <- spain %>%
 | `gatherings_restrictions`        | Indicates the measures of gatherings.                    |
 | `internal_movement_restrictions` | Indicates the measures of the movements between regions. |
 
-We have realized that all numerical variables have **missing values**. Some of them like the deaths or confirmed cases have them at the beginning, but we have no problem with that because that means that there were not cases at that time, so we will give 0 to these values. However, there are other variables for which we have to think what to do with their missing values very carefully. For instance, for the tests, there are 399 missing values out of 451 observations, so we will remove it because there is no much information. For the vaccines, we have 378, which we might expect that since the first day we had vaccines was the 4th of January of 2021 but also, we have some of them in the weekends. For the number of hospitalized people and the ICU people, we have again 303 NAs, but for the moment they will remain in the data set. How to deal with them will be seen in next sections. Finally, the variables for the measures do not have any missing value.
+We have realized that all numerical variables have **missing values**. Some of them like the deaths or confirmed cases have them at the beginning, but we have no problem with that because there were not any cases at that time, so we will give 0 to these values. However, there are other variables for which we have to think what to do with their missing values very carefully. For instance, for the tests, there are 399 missing values out of 451 observations, so we will remove it because there is no much information. For the vaccines, we have 378, which we might expect that since the first day we had vaccines was the 3rd of January of 2021 but also, we have some of them in the weekends. For the number of hospitalized people and the ICU people, we have again 303 NAs, but for the moment they will remain in the data set. How to deal with these variables that have missing values will be seen in next sections. Finally, the variables for the measures do not have any missing value.
 
 ```{r}
 spain <- spain %>%
   mutate(
     deaths = replace(deaths, is.na(deaths), 0),
     confirmed = replace(confirmed, is.na(confirmed), 0)
-  ) %>%
-  select(-tests)
+  )
+
+spain$vaccines[1:348] <- 0
 ```
 
 After that, we should modify our categorical variables, since they are encoded as integers. The first one, `stay_home_restrictions`, will have three categories: no measures, require not leaving house with exceptions (exercise) and not leaving the house. The next one, `school_closing` has another four categories: no measures, recommended closing, require closing for some schools and require closing. For `workplace_closing` we have no measures, recommended closing, require closing for some sectors and require closing. For `transport_closing` we have two levels: no measures and recommended closing. For `gatherings_restrictions`: no measures, restrictions between 10-100 people and restrictions on gatherings of less than 10 people. Finally, the variable `internal_movement_restrictions` has no measures, recommend closing or require closing.
@@ -146,6 +149,8 @@ spain <- spain %>%
 ```
 
 After these changes, in the next section we will perform some visualizations to know the distributions of the variables, relationship between them, etc.
+
+
 
 # Exploratoy Data Analysis (EDA)
 
@@ -202,7 +207,7 @@ c <- spain %>%
 a + b + c
 ```
 
-Due to the missing values, we have discontinuous plots. These missing values appear because there are some places in Spain where the vaccination is stopped on weekends, or because these data is not recorded on weekends. Therefore, we will need a statistical method to impute these values, which will be done in the next section. 
+Due to the missing values, we have discontinuous plots. These missing values appear because there are some places in Spain where the vaccination is stopped on weekends, or because these data is not recorded on weekends. Therefore, we will need a statistical method to impute these values, which will be done in the next section. However, for the other two variables, there is no information prior to July, so we will not take them into account because it is not realistic. 
 
 Then, we are going to see the relationships between our target variables, deaths and confirmed, and some of the categorical predictors. Below, we can see how predictors like `stay_home`, `workplace_closing`, `gatherings_restrictions` and `internal_movement` are related with the confirmed cases:
 
@@ -246,6 +251,11 @@ d <- spain %>%
 The first plot in the top left corner shows us that the variable `stay_home` is wrongly collected, since it was not mandatory to stay at home after the summer, so we must change it. Also, we can observe how after the summer the measures were much more restrictives than during the summer because of the increment of new cases. For the cummulative deaths, we can see it below: 
 
 ```{r}
+spain$stay_home[278:451] <- "recommended"
+```
+
+
+```{r}
 a <- spain %>%
   ggplot(aes(x = date, y = deaths, color = stay_home)) +
   labs(y = " ", x = "") +
@@ -287,22 +297,75 @@ Again, after summer the measures become more agressive due to the new cases. In 
 # Feature Engineering
 
 ```{r}
-spain_new_data <- COVID19::covid19(country = "spain", start = "2021-04-17")
+spain_new_data <- COVID19::covid19(country = "spain", start = "2021-04-16")
+skimr::skim(spain)
 ```
 
 In this section, based on the previous analysis of the variables, we should decide which changes should be done in our model, which are usually called **preprocessing** steps. Our preprocessing steps will be:
 
 1. Divide the date in day, month and year, since the month and the year could be very important in the outcomes.
-2. Since our target variables are accumulated, we will consider the deaths and confirmed cases on each day and they will be divided by the total population and multiplied by 100000, to get the variables `deaths_100k` and `confirmed_100k`, i.e., the deaths and confirmed cases by 100k inhabitants on each day. 
+
+2. Since we want to predict the deaths and confirmed cases in the following days, we should take into account how many deaths and confirmed cases were the days before. Therefore, we will create some new variables which will be the deaths and confirmed cases lagged, i.e., we will consider in our model what happened in the previous days to be able to predict in a better way tomorrow.
+
+3. For the variable `vaccines`, we will impute the 30 NAs we have by doing a linear regression, where the outcome is our variable vaccines, and we will take as predictors
 
 
 ```{r}
+# 1st Step:
 spain <- spain %>% 
   mutate(
     month = as.factor(month(date)),
     year = as.factor(year(date))
   )
 
+spain_new_data <- spain_new_data %>% 
+  mutate(
+    month = as.factor(month(date)),
+    year = as.factor(year(date))
+  )
+
+# 2nd Step:
+spain <- spain %>%
+  mutate(
+    lag_1_deaths = lag(deaths),
+    lag_1_confirmed = lag(confirmed)
+  )
+
+spain_new_data <- spain_new_data %>%
+  mutate(
+    lag_1_deaths = lag(deaths),
+    lag_1_confirmed = lag(confirmed)
+  )
+
+rec_deaths <-
+  recipe(deaths ~ lag_1_deaths + lag_1_confirmed + confirmed + month + year,
+         data = spain) 
+
+rec_deaths_prep <- prep(rec_deaths)
+spain_prep <- bake(rec_deaths_prep, new_data = NULL)
+spain_test <- bake(rec_deaths_prep, new_data = spain_new_data)
+
+lm_spec <-
+  linear_reg() %>%
+  set_engine('lm')
+
+lm_wflow <- 
+  workflow() %>%
+  add_model(lm_spec) %>%
+  add_recipe(rec_deaths)
+
+lm_fit <- fit(lm_wflow, data = spain)
+tidy(lm_fit)
+
+predict(lm_fit, new_data = spain_prep)
+
+spain %>%
+  ggplot(aes(x = date, y = deaths)) +
+  geom_line() 
+```
+
+
+```{r}
 deaths_day <- (spain$deaths - lag(spain$deaths))[-1]
 confirmed_day <- (spain$confirmed - lag(spain$confirmed))[-1]
 spain <- spain[-1, ]
