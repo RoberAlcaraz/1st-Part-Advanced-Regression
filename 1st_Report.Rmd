@@ -28,7 +28,7 @@ bibliography: references.bib
 \newpage
 
 ```{r, echo = F}
-pacman::p_load(COVID19, tidyverse, tidymodels, workflows, tune, patchwork, lubridate)
+pacman::p_load(COVID19, tidyverse, tidymodels, workflows, tune, patchwork, lubridate, mice)
 theme_set(theme_bw())
 
 # spain <- COVID19::covid19(country = "spain", start = "2020-01-22", end = "2021-04-11")
@@ -82,8 +82,6 @@ population <- spain$population[1]
 spain <- spain %>%
   select(date, deaths, confirmed, vaccines, hosp, icu, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions)
 spain <- spain[, -1]
-
-skimr::skim(spain)
 ```
 
 | **Variable**                     | **Description**                                          |
@@ -142,11 +140,11 @@ spain <- spain %>%
                                      levels = c(0, 1, 2, 3, 4),
                                      labels = c("no", "no", "no", "10-100", "<10")),
     
-    internal_movement = factor(internal_movement_restrictions, 
-                               levels = c(0, 1, 2),
-                               labels = c("no", "recommended", "mandatory")),
+    internal_movement_restrictions = factor(internal_movement_restrictions, 
+                                            levels = c(0, 1, 2),
+                                            labels = c("no", "recommended", "mandatory")),
   ) %>%
-  select(-stay_home_restrictions, -internal_movement_restrictions)
+  select(-stay_home_restrictions)
 ```
 
 After these changes, in the next section we will perform some visualizations to know the distributions of the variables, relationship between them, etc.
@@ -210,7 +208,16 @@ a + b + c
 
 Due to the missing values, we have discontinuous plots. These missing values appear because there are some places in Spain where the vaccination is stopped on weekends, or because these data is not recorded on weekends. Therefore, we will need a statistical method to impute these values, which will be done in the next section. However, for the other two variables, there is no information prior to July, so we will not take them into account because it is not realistic. 
 
-Then, we are going to see the relationships between our target variables, deaths and confirmed, and some of the categorical predictors. Below, we can see how predictors like `stay_home`, `workplace_closing`, `gatherings_restrictions` and `internal_movement` are related with the confirmed cases:
+```{r}
+for (i in 1:nrow(spain)-1){
+  if (is.na(spain$vaccines[i+1])) spain$vaccines[i+1] <- spain$vaccines[i]
+}
+spain <- spain %>%
+  select(-hosp, -icu)
+```
+
+
+Then, we are going to see the relationships between our target variables, deaths and confirmed, and some of the categorical predictors. Below, we can see how predictors like `stay_home`, `workplace_closing`, `gatherings_restrictions` and `internal_movement_restrictions` are related with the confirmed cases:
 
 ```{r}
 a <- spain %>%
@@ -239,7 +246,7 @@ c <- spain %>%
   geom_point()
 
 d <- spain %>%
-  ggplot(aes(x = date, y = confirmed, color = internal_movement)) +
+  ggplot(aes(x = date, y = confirmed, color = internal_movement_restrictions)) +
   labs(y = " ") +
   theme(
     legend.title = element_text(size = 10), legend.text = element_text(size = 8)
@@ -283,7 +290,7 @@ c <- spain %>%
   geom_point()
 
 d <- spain %>%
-  ggplot(aes(x = date, y = deaths, color = internal_movement)) +
+  ggplot(aes(x = date, y = deaths, color = internal_movement_restrictions)) +
   labs(y = " ") +
   theme(
     legend.title = element_text(size = 10), legend.text = element_text(size = 8)
@@ -295,7 +302,19 @@ d <- spain %>%
 
 Again, after summer the measures become more agressive due to the new cases. In the following section, we will see how to modify some variables after we have more knowledge about them.
 
+
+
 # Feature Engineering
+
+
+```{r}
+spain_new_data <- COVID19::covid19(country = "spain", start = "2021-04-12")
+skimr::skim(spain)
+```
+
+In this section, based on the previous analysis of the variables, we should decide which changes should be done in our data and then, start modeling. Since our variables of interest, deaths and confirmed cases, are cumulative and daily, we will aggregate them to have the **number of deaths and confirmed cases by week**. This decision has been take due to the different human errors that are in the collection of the coronavirus data, and taking the data weekly, we can predict in a better way the future.
+
+On the one hand, to obtain the number of deaths, confirmed cases and vaccines per week, we will compute firstly the daily cases, substracting today's cases minus tomorrow's and then we will add all the cases of the week. On the other hand, for the categorical variables, we will compute the mode of the variables in every week, i.e., we will give the most frequent values to every week. Below, we can see the distribution of our new variables:
 
 ```{r}
 calculate_mode <- function(x) {
@@ -305,54 +324,93 @@ calculate_mode <- function(x) {
 
 spain <- spain %>%
   mutate(
-    new_date = as.Date(cut(date, "week"))
+    new_date = as.Date(cut(date, "week")),
+    deaths_day = spain$deaths - lag(spain$deaths),
+    confirmed_day = spain$confirmed - lag(spain$confirmed),
+    vaccines_day = spain$vaccines - lag(spain$vaccines)
   ) %>%
-  group_by(new_date) %>%
-  mutate(
-    deaths = sum(deaths),
-    confirmed = sum(confirmed),
-    vaccines = sum(vaccines),
-    hosp = sum(hosp),
+  group_by(date) %>%
+  summarise(
+    new_date = new_date,
+    date = date,
+    deaths_week = sum(deaths_day),
+    confirmed_week = sum(confirmed_day),
+    vaccines_week = sum(vaccines_day),
     school_closing = calculate_mode(school_closing),
     workplace_closing = calculate_mode(workplace_closing),
     gatherings_restrictions = calculate_mode(gatherings_restrictions),
     stay_home = calculate_mode(stay_home),
-    internal_movement = calculate_mode(internal_movement)
+    internal_movement_restrictions = calculate_mode(internal_movement_restrictions)
   ) %>%
   ungroup() %>%
-  filter(date %in% new_date)
+  filter(date %in% new_date) %>%
+  select(-new_date)
 
-deaths_week <- (spain$deaths - lag(spain$deaths))[-1]
-confirmed_week <- (spain$confirmed - lag(spain$confirmed))[-1]
-
-spain <- spain[-1, ] %>%
-  mutate(
-    deaths_week = deaths_week,
-    confirmed_week = confirmed_week
-  )
-
-spain %>%
+a <- spain %>%
   ggplot(aes(x = date, y = deaths_week)) +
   geom_line()
 
-spain %>%
+b <- spain %>%
   ggplot(aes(x = date, y = confirmed_week)) +
   geom_line()
+
+c <- spain %>%
+  ggplot(aes(x = date, y = vaccines_week)) +
+  geom_line()
+
+a + b + c
 ```
 
+Now that we have prepared our data, we have to think about what which **preprocessing** steps should we do. These are some changes that we have to apply to our data before we fit the model. Our preprocessing steps will be:
+
+1. Even though we will **test** our data with the next weeks, we should divide our training data in two sets: an *analysis* set (with the first 47 weeks), where we will fit our models, and a *validation* set (with the last 16), where we will validate our models in order to finally select the one with the best results. After selecting the best one, we will again fit the model in all our training set (analysis + validation) and then, we will see how it works in our test set.
 
 ```{r}
-spain_new_data <- COVID19::covid19(country = "spain", start = "2021-04-12")
-skimr::skim(spain)
+spain_split <- initial_time_split(spain)
+spain_analysis <- training(spain_split)
+spain_validation <- testing(spain_split)
 ```
 
-In this section, based on the previous analysis of the variables, we should decide which changes should be done in our model, which are usually called **preprocessing** steps. Our preprocessing steps will be:
+2. Divide the date in month and year and convert it to categorical, because they could be very important for the outcomes.
 
-1. Divide the date in day, month and year, since the month and the year could be very important in the outcomes.
+```{r}
+spain_rec <- recipe(deaths_week ~ ., data = spain_analysis) %>%
+  step_date(date, features = "month") %>%
+  remove_role(date, old_role = "predictor") %>%
+  step_lag(confirmed_week) %>%
+  step_naomit(lag_1_confirmed_week) %>%
+  remove_role(all_nominal(), vaccines_week, old_role = "predictor") %>%
+  summary()
+
+spain_rec <- recipe(deaths_week ~ confirmed_week + date, data = spain_analysis) %>%
+  step_date(date, features = "month") %>%
+  remove_role(date, old_role = "predictor") %>%
+  step_lag(confirmed_week) 
+
+spain_analysis_prep <- spain_rec %>% prep() %>% bake(new_data = NULL)
+
+lm_spec <- linear_reg() %>%
+  set_engine("lm")
+
+lm_wf <- workflow() %>%
+  add_model(lm_spec) %>%
+  add_recipe(spain_rec)
+
+lm_fit <- lm_wf %>% fit(spain_analysis)
+tidy(lm_fit)
+
+predictions <- predict(lm_fit, new_data = spain_analysis_prep)
+
+spain %>%
+  ggplot(aes(x = date, y = deaths_week)) +
+  geom_line() + 
+  geom_line(y = predictions, color = "red") 
+rlang::last_error()
+```
+
 
 2. Since we want to predict the deaths and confirmed cases in the following days, we should take into account how many deaths and confirmed cases were the days before. Therefore, we will create some new variables which will be the deaths and confirmed cases lagged, i.e., we will consider in our model what happened in the previous days to be able to predict in a better way tomorrow.
 
-3. For the variable `vaccines`, we will impute the 30 NAs we have by doing a linear regression, where the outcome is our variable vaccines, and we will take as predictors
 
 
 ```{r}
@@ -406,11 +464,6 @@ tidy(lm_fit)
 predictions <- predict(lm_fit, new_data = spain_prep)
 predictions <- predictions$.pred
 
-first_model <- spain %>%
-  mutate(
-    
-  )
-
 spain %>%
   ggplot(aes(x = date, y = deaths_week)) +
   geom_line() + 
@@ -429,11 +482,6 @@ first_model %>%
     y = "Deaths per week",
     x = "Date"
   ) 
-```
-
-
-```{r}
-
 ```
 
 
