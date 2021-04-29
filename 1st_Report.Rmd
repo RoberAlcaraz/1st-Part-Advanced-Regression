@@ -28,20 +28,20 @@ bibliography: references.bib
 \newpage
 
 ```{r, echo = F}
-pacman::p_load(COVID19, tidyverse, tidymodels, rsample, recipes, parsnip, yardstick, workflows, tune, patchwork, lubridate)
+# Packages
+# devtools::install_github("stevenpawley/recipeselectors")
+pacman::p_load(COVID19, tidyverse, tidymodels, rsample, recipes, parsnip, 
+               yardstick, workflows, tune, patchwork, lubridate, recipeselectors,
+               doParallel)
+
+# Model packages
+pacman::p_load(ranger, mixOmics, plsmod)
+
+# For ggplot
 theme_set(theme_bw())
 
 # spain <- COVID19::covid19(country = "spain", start = "2020-01-22", end = "2021-04-11")
-# 
-# clm <- COVID19::covid19(country = "spain", level = 2, start = "2020-01-22", end = "2021-04-16") %>% 
-#   filter(administrative_area_level_2 == "Castilla-La Mancha")
-# 
-# madrid <- COVID19::covid19(country = "spain", level = 2, start = "2020-01-22", end = "2021-04-16") %>% 
-#   filter(administrative_area_level_2 == "Comunidad de Madrid")
-
 # saveRDS(spain, "spain.RDS")
-# saveRDS(clm, "clm.RDS")
-# saveRDS(madrid, "madrid.RDS")
 ```
 
 ```{r include=FALSE}
@@ -55,17 +55,15 @@ knitr::opts_chunk$set(warning = FALSE,
                       cache=FALSE, error = TRUE)
 ```
 
-# Introduction
+# INTRODUCTION
 
 The aim of this project is to analyze the coronavirus pandemic (COVID-19) in Spain in general, and in Castilla-La Mancha and Comunidad de Madrid regions, in particular, in order to see what would have happened if policy measures had been taken before. The data has been taken from the R package `COVID19` [@guidotti2020].
 
 ```{r}
 spain <- readRDS("spain.RDS")
-# clm <- readRDS("clm.RDS")
-# madrid <- readRDS("madrid.RDS")
 ```
 
-# Data Cleaning
+# DATA CLEANING
 
 <https://covid19datahub.io/articles/doc/data.html>
 
@@ -151,20 +149,20 @@ After these changes, in the next section we will perform some visualizations to 
 
 
 
-# Exploratoy Data Analysis (EDA)
+# EXPLORATORY DATA ANALYSIS (EDA)
 
 Our two main variables of interest are cumulative `deaths` and `confirmed` cases. First of all, let's see how they are distributed.
 
 ```{r, fig.cap="Cumulative deaths and confirmed cases in Spain"}
-a <- spain %>%
+p1 <- spain %>%
   ggplot(aes(x = date, y = deaths)) +
   geom_line()
 
-b <- spain %>%
+p2 <- spain %>%
   ggplot(aes(x = date, y = confirmed)) +
   geom_line()
 
-a + b 
+p1 + p2 
 ```
 
 As we can observe, there are some mistakes in the data: in the cumulative deaths, there is a drop around June, and in the cumulative confirmed cases, there is another drop in February, which do not make any sense since we are considering **cumulative** cases. Therefore, to fix that error, we will give to that day the value for the previous days in all days that are in that descent.
@@ -177,41 +175,42 @@ for (i in 1:(nrow(spain)-1)){
 ```
 
 ```{r, fig.cap="Cumulative deaths and confirmed cases fixed"}
-a <- spain %>%
+p1 <- spain %>%
   ggplot(aes(x = date, y = deaths)) +
   geom_line()
 
-b <- spain %>%
+p2 <- spain %>%
   ggplot(aes(x = date, y = confirmed)) +
   geom_line()
 
-a + b 
+p1 + p2 
 ```
 
 Now let's focus on the vaccines administered and the hospitalized people:
 
 ```{r}
-a <- spain %>%
+p1 <- spain %>%
   ggplot(aes(x = date, y = vaccines)) +
   geom_line()
 
-b <- spain %>%
+p2 <- spain %>%
   ggplot(aes(x = date, y = hosp)) +
   geom_line()
 
-c <- spain %>%
+p3 <- spain %>%
   ggplot(aes(x = date, y = icu)) +
   geom_line()
 
-a + b + c
+p1 + p2 + p3
 ```
 
-Due to the missing values, we have discontinuous plots. These missing values appear because there are some places in Spain where the vaccination is stopped on weekends, or because these data is not recorded on weekends. Therefore, we will need a statistical method to impute these values, which will be done in the next section. However, for the other two variables, there is no information prior to July, so we will not take them into account because it is not realistic. 
+Due to the missing values, we have discontinuous plots. These missing values appear because there are some places in Spain where the vaccination is stopped on weekends, or because these data is not recorded on weekends. For the vaccination, as we have done before for the deaths and confirmed cases, we will take the value from the day before. However, for the other two variables, there is no information prior to July, so we will not take them into account because it is not realistic. 
 
 ```{r}
 for (i in 1:nrow(spain)-1){
   if (is.na(spain$vaccines[i+1])) spain$vaccines[i+1] <- spain$vaccines[i]
 }
+
 spain <- spain %>%
   select(-hosp, -icu)
 ```
@@ -220,7 +219,7 @@ spain <- spain %>%
 Then, we are going to see the relationships between our target variables, deaths and confirmed, and some of the categorical predictors. Below, we can see how predictors like `stay_home`, `workplace_closing`, `gatherings_restrictions` and `internal_movement_restrictions` are related with the confirmed cases:
 
 ```{r}
-a <- spain %>%
+p1 <- spain %>%
   ggplot(aes(x = date, y = confirmed, color = stay_home)) +
   labs(y = " ", x = "") +
   ggtitle("Confirmed cases") +
@@ -229,7 +228,7 @@ a <- spain %>%
     ) + 
   geom_point()
 
-b <- spain %>%
+p2 <- spain %>%
   ggplot(aes(x = date, y = confirmed, color = workplace_closing)) +
   labs(y = " ") +
   theme(
@@ -237,7 +236,7 @@ b <- spain %>%
     ) + 
   geom_point()
 
-c <- spain %>%
+p3 <- spain %>%
   ggplot(aes(x = date, y = confirmed, color = gatherings_restrictions)) +
   labs(y = " ", x = "") +
   theme(
@@ -245,7 +244,7 @@ c <- spain %>%
     ) + 
   geom_point()
 
-d <- spain %>%
+p4 <- spain %>%
   ggplot(aes(x = date, y = confirmed, color = internal_movement_restrictions)) +
   labs(y = " ") +
   theme(
@@ -253,18 +252,18 @@ d <- spain %>%
     ) + 
   geom_point()
 
-(a / b) | (c / d)
+(p1 / p2) | (p3 / p4)
 ```
 
 The first plot in the top left corner shows us that the variable `stay_home` is wrongly collected, since it was not mandatory to stay at home after the summer, so we must change it. Also, we can observe how after the summer the measures were much more restrictives than during the summer because of the increment of new cases. For the cummulative deaths, we can see it below: 
 
 ```{r}
-spain$stay_home[278:446] <- "recommended"
+spain$stay_home[278:nrow(spain)] <- "recommended"
 ```
 
 
 ```{r}
-a <- spain %>%
+p1 <- spain %>%
   ggplot(aes(x = date, y = deaths, color = stay_home)) +
   labs(y = " ", x = "") +
   ggtitle("Deaths") +
@@ -273,7 +272,7 @@ a <- spain %>%
     ) + 
   geom_point()
 
-b <- spain %>%
+p2 <- spain %>%
   ggplot(aes(x = date, y = deaths, color = workplace_closing)) +
   labs(y = " ") +
   theme(
@@ -281,7 +280,7 @@ b <- spain %>%
     ) + 
   geom_point()
 
-c <- spain %>%
+p3 <- spain %>%
   ggplot(aes(x = date, y = deaths, color = gatherings_restrictions)) +
   labs(y = " ", x = "") +
   theme(
@@ -289,7 +288,7 @@ c <- spain %>%
     ) + 
   geom_point()
 
-d <- spain %>%
+p4 <- spain %>%
   ggplot(aes(x = date, y = deaths, color = internal_movement_restrictions)) +
   labs(y = " ") +
   theme(
@@ -297,14 +296,14 @@ d <- spain %>%
     ) + 
   geom_point()
 
-(a / b) | (c / d)
+(p1 / p2) | (p3 / p4)
 ```
 
 Again, after summer the measures become more agressive due to the new cases. In the following section, we will see how to modify some variables after we have more knowledge about them.
 
 
 
-# Feature Engineering
+# FEATURE ENGINEERING
 
 
 ```{r}
@@ -314,7 +313,7 @@ skimr::skim(spain)
 
 In this section, based on the previous analysis of the variables, we should decide which changes should be done in our data and then, start modeling. Since our variables of interest, deaths and confirmed cases, are cumulative and daily, we will aggregate them to have the **number of deaths and confirmed cases by week**. This decision has been take due to the different human errors that are in the collection of the coronavirus data, and taking the data weekly, we can predict in a better way the future.
 
-On the one hand, to obtain the number of deaths, confirmed cases and vaccines per week, we will compute firstly the daily cases, substracting today's cases minus tomorrow's and then we will add all the cases of the week. On the other hand, for the categorical variables, we will compute the mode of the variables in every week, i.e., we will give the most frequent values to every week. Below, we can see the distribution of our new variables:
+On the one hand, to obtain the number of deaths, confirmed cases and vaccines per week, we will compute firstly the daily cases, substracting today's cases minus tomorrow's and then we will add all the cases of the week. On the other hand, for the categorical variables, we will compute the mode of the variables in every week, i.e., we will give the most frequent values to every week. Below, we can our new data set:
 
 ```{r}
 calculate_mode <- function(x) {
@@ -345,20 +344,10 @@ spain <- spain %>%
   ungroup() %>%
   filter(date %in% new_date) %>%
   select(-new_date)
+```
 
-a <- spain %>%
-  ggplot(aes(x = date, y = deaths_week)) +
-  geom_line()
-
-b <- spain %>%
-  ggplot(aes(x = date, y = confirmed_week)) +
-  geom_line()
-
-c <- spain %>%
-  ggplot(aes(x = date, y = vaccines_week)) +
-  geom_line()
-
-a + b + c
+```{r}
+knitr::kable(head(spain))
 ```
 
 Now that we have prepared our data, we have to think about what which **preprocessing** steps should we do. These are some changes that we have to apply to our data before we fit the model. Our preprocessing steps will be:
@@ -373,45 +362,163 @@ spain <- spain %>%
   )
 ```
 
-3. Since we want to predict the deaths and confirmed cases in the following days, we should take into account how many deaths and confirmed cases were the days before. Therefore, we will create some new variables which will be the deaths and confirmed cases lagged, i.e., we will consider in our model what happened in the previous days to be able to predict in a better way tomorrow.
+2. Since we want to predict the deaths and confirmed cases in the following weeks, we should take into account how many deaths and confirmed cases were the weeks before. Therefore, we will create some new variables which will be the deaths and confirmed cases lagged 3 weeks, i.e., we will consider in our model what happened in the previous weeks to be able to predict in a better way the next month.
 
 ```{r}
 spain <- spain %>%
   mutate(
-    lag_1_deaths_week = lag(deaths_week),
-    lag_1_confirmed_week = lag(confirmed_week)
+    lag_3_deaths_week = lag(deaths_week, n = 3),
+    lag_3_confirmed_week = lag(confirmed_week, n = 3)
   ) %>%
   drop_na()
 ```
 
+3. Before starting fitting models, we should take a look to our predictors. We have 13 which the majority of them are categorical variables, so we must do **feature selection**. To do that, we will use the package `recipeselectors`, which adds some feature selection methods to the `recipes` package, such as variable importance or boluta methods. This time we will use recursive feature elimination, selecting the features that are above the 20% of importance using a random forest model, which are the ones seen below:
 
-3. Even though we will **test** our data with the next weeks, we should divide our training data in two sets: an *analysis* set (with the first 55 weeks), where we will fit our models, and a *validation* set (with the last 8, i.e., around two months), where we will validate our models in order to finally select the one with the best results. After selecting the best one, we will again fit the model in all our training set (analysis + validation) and then, we will see how it works in our test set.
+```{r}
+rfe_model <- rand_forest() %>%
+  set_engine("ranger", importance = "permutation") %>%
+  set_mode("regression")
+
+select_rec <- 
+  recipe(deaths_week ~ ., data = spain) %>%
+  step_rm(date) %>%
+  step_select_vip(all_predictors(), outcome = "deaths_week", model = rfe_model, threshold = 0.2)
+
+new_variables <- select_rec %>% prep() %>% juice()
+spain <- new_variables %>%
+  mutate(date = spain$date)
+head(select_rec %>% prep() %>% juice())
+# knitr::kable(head(select_rec %>% prep() %>% juice()))
+```
+
+
+4. Even though we will **test** our data with the next 3 weeks, we should divide our training data into folds to tune the model parameters and then to compare them. To do that, there is a function called `rolling_origin` from the `rsample` package which can divide our training set into different folds by date, which is very useful for time series models. We will get 10 folds where the analysis set will be the first 12 weeks and the assessment set, the following 3. This method will allow us to tune the different parameters of our models and get the best with the lowest prediction error. After selecting the best one, we will again fit the model in all our training set and then, we will see how it works in our test set.
 
 ```{r}
 set.seed(123)
 spain_rolling <- rolling_origin(
   spain, 
   initial = 12, # number of weeks used to train in each resample
-  assess = 4, # number of weeks used to validate in each resample
+  assess = 3, # number of weeks used to validate in each resample
   cumulative = F,
   skip = 4
   )
+
+# analysis(spain_rolling$splits[[1]])
+# assessment(spain_rolling$splits[[1]])
+```
+
+5. Finally, it is time to 
+
+
+```{r}
+# Recipes
+
+basic_rec <- 
+  recipe(deaths_week ~ ., data = spain) %>%
+  step_rm(date)
+
+linear_reg_rec <- 
+  basic_rec %>%
+  step_nzv(all_numeric_predictors(), freq_cut = 85/5) %>% # remove the zero variance variables
+  step_corr(all_numeric_predictors(), threshold = 0.65) %>% # decorrelate predictors
+  step_dummy(all_nominal_predictors()) # get dummy variables
+  
+pls_rec <- 
+  basic_rec %>%
+  step_nzv(all_numeric_predictors(), freq_cut = 85/5) %>% # remove the zero variance variables 
+  step_normalize(all_numeric_predictors()) %>% # center and scale
+  step_dummy(all_nominal_predictors()) # get dummy variables
+```
+
+# MODEL TUNING AND SELECTION
+
+```{r}
+# Models
+lm_model <- 
+  linear_reg() %>%
+  set_engine("lm")
+  
+ridge_model <- 
+  linear_reg(penalty = tune(), mixture = 0) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+
+lasso_model <- 
+  linear_reg(penalty = tune(), mixture = 1) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+
+elastic_net_model <- 
+  linear_reg(penalty = tune(), mixture = tune()) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+
+pls_model <-
+  pls(predictor_prop = tune(), num_comp = tune()) %>%
+  set_engine('mixOmics') %>%
+  set_mode('regression')
+```
+
+
+```{r}
+workflow_setup <- workflow_set(
+  preproc = list(
+    linear_reg = linear_reg_rec,
+    pls        = pls_rec
+  ),
+  models = list(
+    lm          = lm_model,
+    ridge       = ridge_model,
+    lasso       = lasso_model,
+    elastic_net = elastic_net_model,
+    pls         = pls_model
+  ), cross = T
+)
+
+workflow_setup <- workflow_setup %>%
+  filter(wflow_id == c("linear_reg_lm", "linear_reg_ridge", "linear_reg_lasso", "linear_reg_elastic_net", "pls_pls"))
+
+autoplot(workflow_tune_results)
 ```
 
 ```{r}
+cl <- makePSOCKcluster(8)
+registerDoParallel(cl)
+
+grid_ctrl <-
+   control_grid(
+      save_pred = TRUE,
+      save_workflow = TRUE
+   )
+
+workflow_tune_results <- workflow_setup %>%
+  workflow_map(
+    fn = "tune_grid",
+    seed = 1503,
+    resamples = spain_rolling,
+    grid = 25,
+    control = grid_ctrl
+   )
+
+stopCluster(cl)
+```
+
+
+```{r}
 # Linear model
-lm_rec <- 
-  recipe(deaths_week ~ ., data = spain) %>%
-  step_rm(date, lag_1_deaths_week) %>%
-  step_dummy(all_nominal_predictors()) %>%
-  step_zv(all_predictors())
-  
-lm_spec <- linear_reg() %>%
+
+lm_model <- linear_reg() %>%
   set_engine("lm")
 
 lm_wf <- workflow() %>%
-  add_recipe(lm_rec) %>%
-  add_model(lm_spec)
+  add_recipe(linear_reg_rec) %>%
+  add_model(lm_model)
+
+lm_fit <- lm_wf %>%
+  fit(data = spain)
+tidy(lm_fit)
 
 lm_fit <- lm_wf %>%
   fit_resamples(
@@ -419,8 +526,11 @@ lm_fit <- lm_wf %>%
     control = control_resamples(save_pred = T),
     metrics = metric_set(rmse, rsq, mae)
   )
+tidy(lm_fit$id)
+pull_workflow_fit(lm_fit)
 
 predictions <- lm_fit %>% collect_predictions()
+
 lm_fit %>% collect_metrics()
 ```
 
@@ -428,7 +538,7 @@ lm_fit %>% collect_metrics()
 # Random forest model
 rf_rec <- 
   recipe(deaths_week ~ ., data = spain) %>%
-  step_rm(date, lag_1_deaths_week)
+  step_rm(date)
   
 rf_spec <- rand_forest(mtry = tune()) %>%
   set_engine("ranger") %>%
@@ -464,6 +574,37 @@ rf_fit <- rf_wf %>%
 predictions <- rf_fit %>% collect_predictions()
 rf_fit %>% collect_metrics()
 ```
+
+```{r}
+workflow_setup <- workflow_set(
+  preproc = list(
+    lm_rec = lm_rec,
+    rf_rec = rf_rec
+  ),
+  models = list(
+    lm = lm_spec,
+    rf = rf_spec
+  ), cross = T
+)
+
+grid_ctrl <-
+   control_grid(
+      save_pred = TRUE,
+      parallel_over = "everything",
+      save_workflow = TRUE
+   )
+
+workflow_tune_results <- workflow_setup %>%
+  workflow_map(
+      seed = 1503,
+      resamples = spain_rolling,
+      grid = 25,
+      control = grid_ctrl
+   )
+
+autoplot(workflow_tune_results)
+```
+
 
 
 
@@ -579,58 +720,8 @@ first_model %>%
 ```
 
 
-```{r}
-deaths_day <- (spain$deaths - lag(spain$deaths))[-1]
-confirmed_day <- (spain$confirmed - lag(spain$confirmed))[-1]
-spain <- spain[-1, ]
-
-spain <- spain %>%
-  mutate(
-    deaths_acc = deaths,
-    confirmed_acc = confirmed,
-    deaths = deaths_day,
-    confirmed = confirmed_day
-  )
-
-spain <- spain %>%
-  mutate(
-    deaths_100k = (deaths*100000)/population,
-    confirmed_100k = (confirmed*100000)/population
-  )
-
-spain %>%
-  ggplot(aes(x = date, y = deaths_100k)) +
-  geom_line()
-spain %>%
-  ggplot(aes(x = date, y = confirmed)) +
-  geom_line()
-```
-
-
-```{r}
-
-
-spain <- spain %>%
-  mutate(
-    deathsLag1 = lag(deaths)
-  )
-spain <- spain[-1, ]
-
-mod1 <- lm(deaths ~ deathsLag1 + month + year + , data = spain)
-
-spain %>%
-  ggplot(aes(x = date, y = deaths)) +
-  geom_line() + 
-  geom_line(y = predict(mod1), color = "red")
-  
-ggplot(data, aes(x=Date, y=CO2)) +
-  geom_line(color="red", size=1.2) + 
-  stat_smooth(method="lm", formula=y ~ x, se=FALSE, col="black") +
-  theme_minimal()
-```
 
 
 
-# Model tuning and selection
 
-# References
+# REFERENCES
