@@ -503,6 +503,8 @@ workflow_tune_results <- workflow_setup %>%
    )
 
 stopCluster(cl)
+
+autoplot(workflow_tune_results)
 ```
 
 
