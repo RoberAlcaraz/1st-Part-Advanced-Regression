@@ -5,6 +5,7 @@ author: '*Roberto Jesús Alcaraz Molina*'
 date: "09/05/2021"
 output:
   pdf_document:
+    latex_engine: xelatex
     number_section: true
     highlight: tango
     fig_caption: yes
@@ -28,20 +29,23 @@ bibliography: references.bib
 \newpage
 
 ```{r, echo = F}
+# Model packages
+pacman::p_load(ranger, mixOmics, plsmod)
+
 # Packages
 # devtools::install_github("stevenpawley/recipeselectors")
 pacman::p_load(COVID19, tidyverse, tidymodels, rsample, recipes, parsnip, 
                yardstick, workflows, tune, patchwork, lubridate, recipeselectors,
-               doParallel)
-
-# Model packages
-pacman::p_load(ranger, mixOmics, plsmod)
-
+               doParallel, tidyquant, finetune)
+library(tidyverse)
 # For ggplot
-theme_set(theme_bw())
+theme_set(theme_tq())
 
-# spain <- COVID19::covid19(country = "spain", start = "2020-01-22", end = "2021-04-11")
-# saveRDS(spain, "spain.RDS")
+# spain <- covid19(country = "spain", start = "2020-01-22", end = "2021-04-11")
+# spain_new_data <- covid19(country = "spain", start = "2021-04-11", end = "2021-04-25")
+
+# saveRDS(spain, "data/spain.RDS")
+# saveRDS(spain_new_data, "data/spain_new_data.RDS")
 ```
 
 ```{r include=FALSE}
@@ -51,7 +55,7 @@ knitr::opts_chunk$set(warning = FALSE,
                       eval = T,
                       fig.pos="H", 
                       fig.align="center",
-                      fig.width=15,
+                      fig.width=12,
                       cache=FALSE, error = TRUE)
 ```
 
@@ -60,7 +64,8 @@ knitr::opts_chunk$set(warning = FALSE,
 The aim of this project is to analyze the coronavirus pandemic (COVID-19) in Spain in general, and in Castilla-La Mancha and Comunidad de Madrid regions, in particular, in order to see what would have happened if policy measures had been taken before. The data has been taken from the R package `COVID19` [@guidotti2020].
 
 ```{r}
-spain <- readRDS("spain.RDS")
+spain <- readRDS("data/spain.RDS")
+spain_new_data <- readRDS("data/spain_new_data.RDS")
 ```
 
 # DATA CLEANING
@@ -78,8 +83,16 @@ skimr::skim(spain)
 ```{r}
 population <- spain$population[1]
 spain <- spain %>%
-  select(date, deaths, confirmed, vaccines, hosp, icu, stay_home_restrictions, school_closing, workplace_closing, transport_closing, gatherings_restrictions, internal_movement_restrictions)
+  select(date, deaths, confirmed, vaccines, hosp, icu, stay_home_restrictions,
+         school_closing, workplace_closing, transport_closing, gatherings_restrictions,
+         internal_movement_restrictions)
 spain <- spain[, -1]
+
+spain_new_data <- spain_new_data %>%
+  select(date, deaths, confirmed, vaccines, hosp, icu, stay_home_restrictions,
+         school_closing, workplace_closing, transport_closing, gatherings_restrictions,
+         internal_movement_restrictions)
+spain_new_data <- spain_new_data[, -1]
 ```
 
 | **Variable**                     | **Description**                                          |
@@ -108,15 +121,41 @@ spain <- spain %>%
     deaths = replace(deaths, is.na(deaths), 0),
     confirmed = replace(confirmed, is.na(confirmed), 0)
   )
-
 spain$vaccines[1:348] <- 0
 ```
 
 After that, we should modify our categorical variables, since they are encoded as integers. The first one, `stay_home_restrictions`, will have three categories: no measures, require not leaving house with exceptions (exercise) and not leaving the house. The next one, `school_closing` has another four categories: no measures, recommended closing, require closing for some schools and require closing. For `workplace_closing` we have no measures, recommended closing, require closing for some sectors and require closing. For `transport_closing` we have two levels: no measures and recommended closing. For `gatherings_restrictions`: no measures, restrictions between 10-100 people and restrictions on gatherings of less than 10 people. Finally, the variable `internal_movement_restrictions` has no measures, recommend closing or require closing.
 
 ```{r}
-# For Spain
 spain <- spain %>%
+  mutate(
+    stay_home = factor(stay_home_restrictions, 
+                       levels = c(0, 1, 2),
+                       labels = c("no", "recommended", "mandatory")),
+    
+    school_closing = factor(school_closing, 
+                            levels = c(0, 1, 2, 3),
+                            labels = c("no", "recommended", "require", "mandatory")),
+    
+    workplace_closing = factor(workplace_closing, 
+                               levels = c(0, 1, 2, 3),
+                               labels = c("no", "recommended", "require", "mandatory")),
+    
+    transport_closing = factor(transport_closing, 
+                               levels = c(0, 1),
+                               labels = c("no", "recommended")),
+    
+    gatherings_restrictions = factor(gatherings_restrictions, 
+                                     levels = c(0, 1, 2, 3, 4),
+                                     labels = c("no", "no", "no", "10-100", "<10")),
+    
+    internal_movement_restrictions = factor(internal_movement_restrictions, 
+                                            levels = c(0, 1, 2),
+                                            labels = c("no", "recommended", "mandatory")),
+  ) %>%
+  select(-stay_home_restrictions)
+
+spain_new_data <- spain_new_data %>%
   mutate(
     stay_home = factor(stay_home_restrictions, 
                        levels = c(0, 1, 2),
@@ -191,15 +230,15 @@ Now let's focus on the vaccines administered and the hospitalized people:
 ```{r}
 p1 <- spain %>%
   ggplot(aes(x = date, y = vaccines)) +
-  geom_line()
+  geom_line(na.rm = T)
 
 p2 <- spain %>%
   ggplot(aes(x = date, y = hosp)) +
-  geom_line()
+  geom_line(na.rm = T)
 
 p3 <- spain %>%
   ggplot(aes(x = date, y = icu)) +
-  geom_line()
+  geom_line(na.rm = T)
 
 p1 + p2 + p3
 ```
@@ -212,6 +251,14 @@ for (i in 1:nrow(spain)-1){
 }
 
 spain <- spain %>%
+  select(-hosp, -icu)
+
+spain_new_data$vaccines[1] <- 10784997 # we take the data from the previous day
+for (i in 1:nrow(spain_new_data)-1){
+  if (is.na(spain_new_data$vaccines[i+1])) spain_new_data$vaccines[i+1] <- spain_new_data$vaccines[i]
+}
+
+spain_new_data <- spain_new_data %>%
   select(-hosp, -icu)
 ```
 
@@ -259,6 +306,7 @@ The first plot in the top left corner shows us that the variable `stay_home` is 
 
 ```{r}
 spain$stay_home[278:nrow(spain)] <- "recommended"
+spain_new_data$stay_home <- "recommended"
 ```
 
 
@@ -306,11 +354,6 @@ Again, after summer the measures become more agressive due to the new cases. In 
 # FEATURE ENGINEERING
 
 
-```{r}
-spain_new_data <- COVID19::covid19(country = "spain", start = "2021-04-12")
-skimr::skim(spain)
-```
-
 In this section, based on the previous analysis of the variables, we should decide which changes should be done in our data and then, start modeling. Since our variables of interest, deaths and confirmed cases, are cumulative and daily, we will aggregate them to have the **number of deaths and confirmed cases by week**. This decision has been take due to the different human errors that are in the collection of the coronavirus data, and taking the data weekly, we can predict in a better way the future.
 
 On the one hand, to obtain the number of deaths, confirmed cases and vaccines per week, we will compute firstly the daily cases, substracting today's cases minus tomorrow's and then we will add all the cases of the week. On the other hand, for the categorical variables, we will compute the mode of the variables in every week, i.e., we will give the most frequent values to every week. Below, we can our new data set:
@@ -344,6 +387,31 @@ spain <- spain %>%
   ungroup() %>%
   filter(date %in% new_date) %>%
   select(-new_date)
+
+
+spain_new_data <- spain_new_data %>%
+  mutate(
+    new_date = as.Date(cut(date, "week")),
+    deaths_day = spain_new_data$deaths - lag(spain_new_data$deaths),
+    confirmed_day = spain_new_data$confirmed - lag(spain_new_data$confirmed),
+    vaccines_day = spain_new_data$vaccines - lag(spain_new_data$vaccines)
+  ) %>%
+  group_by(date) %>%
+  summarise(
+    new_date = new_date,
+    date = date,
+    deaths_week = sum(deaths_day),
+    confirmed_week = sum(confirmed_day),
+    vaccines_week = sum(vaccines_day),
+    school_closing = calculate_mode(school_closing),
+    workplace_closing = calculate_mode(workplace_closing),
+    gatherings_restrictions = calculate_mode(gatherings_restrictions),
+    stay_home = calculate_mode(stay_home),
+    internal_movement_restrictions = calculate_mode(internal_movement_restrictions)
+  ) %>%
+  ungroup() %>%
+  filter(date %in% new_date) %>%
+  select(-new_date)
 ```
 
 ```{r}
@@ -360,6 +428,12 @@ spain <- spain %>%
     month = factor(month(date)),
     year = factor(year(date))
   )
+
+spain_new_data <- spain_new_data %>%
+  mutate(
+    month = factor(month(date)),
+    year = factor(year(date))
+  )
 ```
 
 2. Since we want to predict the deaths and confirmed cases in the following weeks, we should take into account how many deaths and confirmed cases were the weeks before. Therefore, we will create some new variables which will be the deaths and confirmed cases lagged 3 weeks, i.e., we will consider in our model what happened in the previous weeks to be able to predict in a better way the next month.
@@ -371,6 +445,14 @@ spain <- spain %>%
     lag_3_confirmed_week = lag(confirmed_week, n = 3)
   ) %>%
   drop_na()
+
+tail(c(1,2,3,3,5), 3)[1:2]
+
+spain_new_data <- spain_new_data %>%
+  mutate(
+    lag_3_deaths_week = tail(spain$deaths_week, 3)[1:2],
+    lag_3_confirmed_week = tail(spain$confirmed_week, 3)[1:2]
+  )
 ```
 
 3. Before starting fitting models, we should take a look to our predictors. We have 13 which the majority of them are categorical variables, so we must do **feature selection**. To do that, we will use the package `recipeselectors`, which adds some feature selection methods to the `recipes` package, such as variable importance or boluta methods. This time we will use recursive feature elimination, selecting the features that are above the 20% of importance using a random forest model, which are the ones seen below:
@@ -380,6 +462,7 @@ rfe_model <- rand_forest() %>%
   set_engine("ranger", importance = "permutation") %>%
   set_mode("regression")
 
+set.seed(1234)
 select_rec <- 
   recipe(deaths_week ~ ., data = spain) %>%
   step_rm(date) %>%
@@ -414,7 +497,6 @@ spain_rolling <- rolling_origin(
 
 ```{r}
 # Recipes
-
 basic_rec <- 
   recipe(deaths_week ~ ., data = spain) %>%
   step_rm(date)
@@ -463,27 +545,26 @@ pls_model <-
 
 
 ```{r}
-workflow_setup <- workflow_set(
+workflow_tune_compare <- workflow_set(
   preproc = list(
     linear_reg = linear_reg_rec,
     pls        = pls_rec
   ),
   models = list(
-    lm          = lm_model,
-    ridge       = ridge_model,
-    lasso       = lasso_model,
-    elastic_net = elastic_net_model,
-    pls         = pls_model
-  ), cross = T
+    lm_wf            = lm_model,
+    ridge_wf         = ridge_model,
+    lasso_wf         = lasso_model,
+    elastic_net_wf   = elastic_net_model,
+    model_wf         = pls_model
+  ), 
+  cross = T
 )
 
-workflow_setup <- workflow_setup %>%
-  filter(wflow_id == c("linear_reg_lm", "linear_reg_ridge", "linear_reg_lasso", "linear_reg_elastic_net", "pls_pls"))
-
-autoplot(workflow_tune_results)
+workflow_tune_compare <- workflow_tune_compare %>%
+  filter(wflow_id == c("linear_reg_lm_wf", "linear_reg_ridge_wf", "linear_reg_lasso_wf", "linear_reg_elastic_net_wf", "pls_model_wf"))
 ```
 
-```{r}
+```{r, eval=F}
 cl <- makePSOCKcluster(8)
 registerDoParallel(cl)
 
@@ -493,234 +574,87 @@ grid_ctrl <-
       save_workflow = TRUE
    )
 
-workflow_tune_results <- workflow_setup %>%
+workflow_results <- workflow_tune_compare %>%
   workflow_map(
-    fn = "tune_grid",
     seed = 1503,
     resamples = spain_rolling,
     grid = 25,
-    control = grid_ctrl
+    control = grid_ctrl,
+    verbose = T
    )
+
+# i	No tuning parameters. `fit_resamples()` will be attempted
+# i 1 of 5 resampling: linear_reg_lm
+# v 1 of 5 resampling: linear_reg_lm (10.7s)
+# i 2 of 5 tuning:     linear_reg_ridge
+# v 2 of 5 tuning:     linear_reg_ridge (3.3s)
+# i 3 of 5 tuning:     linear_reg_lasso
+# v 3 of 5 tuning:     linear_reg_lasso (2.8s)
+# i 4 of 5 tuning:     linear_reg_elastic_net
+# v 4 of 5 tuning:     linear_reg_elastic_net (57.6s)
+# i 5 of 5 tuning:     pls_pls
+# v 5 of 5 tuning:     pls_pls (59s)
 
 stopCluster(cl)
 
-autoplot(workflow_tune_results)
+# saveRDS(workflow_results, "workflow_results.RDS")
+```
+
+```{r}
+workflow_results <- readRDS("workflow_results.RDS")
+autoplot(workflow_results, select_best = T) +
+  scale_color_tq() +
+  theme_tq()
 ```
 
 
+
 ```{r}
-# Linear model
+best_results <- 
+   workflow_results %>% 
+   pull_workflow_set_result("pls_model_wf") %>% 
+   select_best(metric = "rmse")
+best_results
 
-lm_model <- linear_reg() %>%
-  set_engine("lm")
+best_workflow <- 
+   workflow_results %>% 
+   pull_workflow("pls_model_wf") %>% 
+   finalize_workflow(best_results)
+```
 
-lm_wf <- workflow() %>%
-  add_recipe(linear_reg_rec) %>%
-  add_model(lm_model)
-
-lm_fit <- lm_wf %>%
+```{r, results='hide'}
+# Fit the model
+best_fit <- best_workflow %>%
   fit(data = spain)
-tidy(lm_fit)
 
-lm_fit <- lm_wf %>%
-  fit_resamples(
-    spain_rolling, 
-    control = control_resamples(save_pred = T),
-    metrics = metric_set(rmse, rsq, mae)
-  )
-tidy(lm_fit$id)
-pull_workflow_fit(lm_fit)
+# Predictions in the training and testing sets
+pred_train <- best_fit %>%
+  predict(new_data = spain)
 
-predictions <- lm_fit %>% collect_predictions()
-
-lm_fit %>% collect_metrics()
-```
-
-```{r}
-# Random forest model
-rf_rec <- 
-  recipe(deaths_week ~ ., data = spain) %>%
-  step_rm(date)
-  
-rf_spec <- rand_forest(mtry = tune()) %>%
-  set_engine("ranger") %>%
-  set_mode("regression")
-
-rf_wf <- workflow() %>%
-  add_recipe(rf_rec) %>%
-  add_model(rf_spec)
-
-rf_parameters <- workflow() %>%
-  add_recipe(rf_rec) %>%
-  add_model(rf_spec) %>%
-  parameters()
-
-set.seed(1234)
-rf_tune <- rf_wf %>%
-  tune_grid(
-    spain_rolling, 
-    grid = 20,
-    param_info = rf_parameters,
-    metrics = metric_set(rmse, rsq, mae)
-  )
-
-show_best(rf_tune)
-
-rf_fit <- rf_wf %>%
-  fit_resamples(
-    spain_rolling, 
-    control = control_resamples(save_pred = T),
-    metrics = metric_set(rmse, rsq, mae)
-  )
-
-predictions <- rf_fit %>% collect_predictions()
-rf_fit %>% collect_metrics()
-```
-
-```{r}
-workflow_setup <- workflow_set(
-  preproc = list(
-    lm_rec = lm_rec,
-    rf_rec = rf_rec
-  ),
-  models = list(
-    lm = lm_spec,
-    rf = rf_spec
-  ), cross = T
-)
-
-grid_ctrl <-
-   control_grid(
-      save_pred = TRUE,
-      parallel_over = "everything",
-      save_workflow = TRUE
-   )
-
-workflow_tune_results <- workflow_setup %>%
-  workflow_map(
-      seed = 1503,
-      resamples = spain_rolling,
-      grid = 25,
-      control = grid_ctrl
-   )
-
-autoplot(workflow_tune_results)
-```
-
-
-
-
-```{r}
-
-spain_rec <- recipe(deaths_week ~ ., data = spain_analysis) %>%
-  step_date(date, features = "month") %>%
-  remove_role(date, old_role = "predictor") %>%
-  step_lag(confirmed_week) %>%
-  step_naomit(lag_1_confirmed_week) %>%
-  remove_role(all_nominal(), vaccines_week, old_role = "predictor") %>%
-  summary()
-
-spain_rec <- recipe(deaths_week ~ confirmed_week + date, data = spain_analysis) %>%
-  step_date(date, features = "month") %>%
-  remove_role(date, old_role = "predictor") %>%
-  step_lag(confirmed_week) 
-
-spain_analysis_prep <- spain_rec %>% prep() %>% bake(new_data = NULL)
-
-lm_spec <- linear_reg() %>%
-  set_engine("lm")
-
-lm_wf <- workflow() %>%
-  add_model(lm_spec) %>%
-  add_recipe(spain_rec)
-
-lm_fit <- lm_wf %>% fit(spain_analysis)
-tidy(lm_fit)
-
-predictions <- predict(lm_fit, new_data = spain_analysis_prep)
+pred_test <- best_fit %>%
+  predict(new_data = spain_new_data)
 
 spain %>%
-  ggplot(aes(x = date, y = deaths_week)) +
-  geom_line() + 
-  geom_line(y = predictions, color = "red") 
-```
-
-
-
-
-
-
-```{r}
-# 1st Step:
-spain <- spain %>% 
-  mutate(
-    month = as.factor(month(new_date)),
-    year = as.factor(year(new_date))
-  )
-
-spain_new_data <- spain_new_data %>% 
-  mutate(
-    month = as.factor(month(date)),
-    year = as.factor(year(date))
-  )
-
-# 2nd Step:
-spain <- spain %>%
-  mutate(
-    lag_1_deaths_week = lag(deaths_week),
-    lag_1_confirmed_week = lag(confirmed_week)
-  )
-
-spain_new_data <- spain_new_data %>%
-  mutate(
-    lag_1_deaths_week = lag(deaths_week),
-    lag_1_confirmed_week = lag(confirmed_week)
-  )
-
-rec_deaths <-
-  recipe(deaths_week ~ lag_1_deaths_week + lag_1_confirmed_week + confirmed_week + month + year +
-           school_closing + workplace_closing + transport_closing + gatherings_restrictions + stay_home,
-         data = spain) 
-
-rec_deaths_prep <- prep(rec_deaths)
-spain_prep <- bake(rec_deaths_prep, new_data = NULL)
-spain_test <- bake(rec_deaths_prep, new_data = spain_new_data)
-
-lm_spec <-
-  linear_reg() %>%
-  set_engine('lm')
-
-lm_wflow <- 
-  workflow() %>%
-  add_model(lm_spec) %>%
-  add_recipe(rec_deaths)
-
-lm_fit <- fit(lm_wflow, data = spain)
-tidy(lm_fit)
-
-predictions <- predict(lm_fit, new_data = spain_prep)
-predictions <- predictions$.pred
-
-spain %>%
-  ggplot(aes(x = date, y = deaths_week)) +
-  geom_line() + 
-  geom_line(y = predictions, color = "red") 
-
-first_model <- spain[-1, ] %>%
-  mutate(predictions = predictions[-1]) %>%
+  mutate(predictions = pred_train$.pred) %>%
   select(date, deaths_week, predictions) %>%
-  gather(key = "Variable", value = "value", -date)
+  pivot_longer(cols = c("deaths_week", "predictions"), values_to = "value")
 
-first_model %>%
+pred_new_data <- spain_new_data %>%
+  mutate(predictions = pred_test$.pred) %>%
+  select(date, deaths_week, predictions) 
+  
+spain %>%
+  mutate(predictions = pred_train$.pred) %>%
+  select(date, deaths_week, predictions) %>%
+  pivot_longer(cols = c("deaths_week", "predictions"), values_to = "value") %>%
   ggplot(aes(x = date, y = value)) +
-  geom_line(aes(color = Variable), size = 1) +
+  geom_line(aes(color = name), size = 1) +
   scale_color_manual(values = c("darkred", "steelblue")) +
   labs(
     y = "Deaths per week",
     x = "Date"
   ) 
 ```
-
 
 
 
