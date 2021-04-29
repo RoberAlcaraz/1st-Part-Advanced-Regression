@@ -28,7 +28,7 @@ bibliography: references.bib
 \newpage
 
 ```{r, echo = F}
-pacman::p_load(COVID19, tidyverse, tidymodels, workflows, tune, patchwork, lubridate, mice)
+pacman::p_load(COVID19, tidyverse, tidymodels, rsample, recipes, parsnip, yardstick, workflows, tune, patchwork, lubridate)
 theme_set(theme_bw())
 
 # spain <- COVID19::covid19(country = "spain", start = "2020-01-22", end = "2021-04-11")
@@ -363,17 +363,112 @@ a + b + c
 
 Now that we have prepared our data, we have to think about what which **preprocessing** steps should we do. These are some changes that we have to apply to our data before we fit the model. Our preprocessing steps will be:
 
-1. Even though we will **test** our data with the next weeks, we should divide our training data in two sets: an *analysis* set (with the first 47 weeks), where we will fit our models, and a *validation* set (with the last 16), where we will validate our models in order to finally select the one with the best results. After selecting the best one, we will again fit the model in all our training set (analysis + validation) and then, we will see how it works in our test set.
+1. Divide the date in month and year and convert it to categorical, because they could be very important for the outcomes.
 
 ```{r}
-spain_split <- initial_time_split(spain)
-spain_analysis <- training(spain_split)
-spain_validation <- testing(spain_split)
+spain <- spain %>%
+  mutate(
+    month = factor(month(date)),
+    year = factor(year(date))
+  )
 ```
 
-2. Divide the date in month and year and convert it to categorical, because they could be very important for the outcomes.
+3. Since we want to predict the deaths and confirmed cases in the following days, we should take into account how many deaths and confirmed cases were the days before. Therefore, we will create some new variables which will be the deaths and confirmed cases lagged, i.e., we will consider in our model what happened in the previous days to be able to predict in a better way tomorrow.
 
 ```{r}
+spain <- spain %>%
+  mutate(
+    lag_1_deaths_week = lag(deaths_week),
+    lag_1_confirmed_week = lag(confirmed_week)
+  ) %>%
+  drop_na()
+```
+
+
+3. Even though we will **test** our data with the next weeks, we should divide our training data in two sets: an *analysis* set (with the first 55 weeks), where we will fit our models, and a *validation* set (with the last 8, i.e., around two months), where we will validate our models in order to finally select the one with the best results. After selecting the best one, we will again fit the model in all our training set (analysis + validation) and then, we will see how it works in our test set.
+
+```{r}
+set.seed(123)
+spain_rolling <- rolling_origin(
+  spain, 
+  initial = 12, # number of weeks used to train in each resample
+  assess = 4, # number of weeks used to validate in each resample
+  cumulative = F,
+  skip = 4
+  )
+```
+
+```{r}
+# Linear model
+lm_rec <- 
+  recipe(deaths_week ~ ., data = spain) %>%
+  step_rm(date, lag_1_deaths_week) %>%
+  step_dummy(all_nominal_predictors()) %>%
+  step_zv(all_predictors())
+  
+lm_spec <- linear_reg() %>%
+  set_engine("lm")
+
+lm_wf <- workflow() %>%
+  add_recipe(lm_rec) %>%
+  add_model(lm_spec)
+
+lm_fit <- lm_wf %>%
+  fit_resamples(
+    spain_rolling, 
+    control = control_resamples(save_pred = T),
+    metrics = metric_set(rmse, rsq, mae)
+  )
+
+predictions <- lm_fit %>% collect_predictions()
+lm_fit %>% collect_metrics()
+```
+
+```{r}
+# Random forest model
+rf_rec <- 
+  recipe(deaths_week ~ ., data = spain) %>%
+  step_rm(date, lag_1_deaths_week)
+  
+rf_spec <- rand_forest(mtry = tune()) %>%
+  set_engine("ranger") %>%
+  set_mode("regression")
+
+rf_wf <- workflow() %>%
+  add_recipe(rf_rec) %>%
+  add_model(rf_spec)
+
+rf_parameters <- workflow() %>%
+  add_recipe(rf_rec) %>%
+  add_model(rf_spec) %>%
+  parameters()
+
+set.seed(1234)
+rf_tune <- rf_wf %>%
+  tune_grid(
+    spain_rolling, 
+    grid = 20,
+    param_info = rf_parameters,
+    metrics = metric_set(rmse, rsq, mae)
+  )
+
+show_best(rf_tune)
+
+rf_fit <- rf_wf %>%
+  fit_resamples(
+    spain_rolling, 
+    control = control_resamples(save_pred = T),
+    metrics = metric_set(rmse, rsq, mae)
+  )
+
+predictions <- rf_fit %>% collect_predictions()
+rf_fit %>% collect_metrics()
+```
+
+
+
+```{r}
+
 spain_rec <- recipe(deaths_week ~ ., data = spain_analysis) %>%
   step_date(date, features = "month") %>%
   remove_role(date, old_role = "predictor") %>%
@@ -405,11 +500,10 @@ spain %>%
   ggplot(aes(x = date, y = deaths_week)) +
   geom_line() + 
   geom_line(y = predictions, color = "red") 
-rlang::last_error()
 ```
 
 
-2. Since we want to predict the deaths and confirmed cases in the following days, we should take into account how many deaths and confirmed cases were the days before. Therefore, we will create some new variables which will be the deaths and confirmed cases lagged, i.e., we will consider in our model what happened in the previous days to be able to predict in a better way tomorrow.
+
 
 
 
