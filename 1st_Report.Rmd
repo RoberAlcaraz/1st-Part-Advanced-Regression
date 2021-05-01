@@ -427,9 +427,20 @@ knowledge about them.
 # FEATURE ENGINEERING
 
 
-In this section, based on the previous analysis of the variables, we should decide which changes should be done in our data and then, start modeling. Since our variables of interest, deaths and confirmed cases, are cumulative and daily, we will aggregate them to have the **number of deaths and confirmed cases by week**. This decision has been take due to the different human errors that are in the collection of the coronavirus data, and taking the data weekly, we can predict in a better way the future.
+In this section, based on the previous analysis of the variables, we should decide
+which changes should be done in our data. Firslty, since our variables of interest,
+deaths and confirmed cases, are cumulative and daily, we will aggregate them to 
+have the **number of deaths and confirmed cases by week**. This decision has been
+taken because there are too much noise in daily data due to different human errors
+that appear when this data is collected, so taking the data weekly allow us to 
+predict in a better way the future.
 
-On the one hand, to obtain the number of deaths, confirmed cases and vaccines per week, we will compute firstly the daily cases, substracting today's cases minus tomorrow's and then we will add all the cases of the week. On the other hand, for the categorical variables, we will compute the mode of the variables in every week, i.e., we will give the most frequent values to every week. Below, we can our new data set:
+On the one hand, to obtain the number of deaths, confirmed cases and vaccines per
+week, we will compute firstly the daily cases, substracting today's cases minus 
+tomorrow's, and then we will add all the cases of the week. On the other hand, for
+the categorical variables, we will compute the mode of the variables in every week,
+i.e., we will give the most frequent values to every week. Below, we can our new
+data set:
 
 ```{r}
 calculate_mode <- function(x) {
@@ -491,9 +502,12 @@ spain_new_data <- spain_new_data %>%
 knitr::kable(head(spain))
 ```
 
-Now that we have prepared our data, we have to think about what which **preprocessing** steps should we do. These are some changes that we have to apply to our data before we fit the model. Our preprocessing steps will be:
+Now that we have prepared our data, we have to think about what **preprocessing**
+steps should we do. These are some changes that we have to apply to our data before
+we start fitting the models. Our preprocessing steps will be:
 
-1. Divide the date in month and year and convert it to categorical, because they could be very important for the outcomes.
+1. Divide the date in month and year and convert it to categorical, because they
+could be very important for the outcomes.
 
 ```{r}
 spain <- spain %>%
@@ -509,7 +523,11 @@ spain_new_data <- spain_new_data %>%
   )
 ```
 
-2. Since we want to predict the deaths and confirmed cases in the following weeks, we should take into account how many deaths and confirmed cases were the weeks before. Therefore, we will create some new variables which will be the deaths and confirmed cases lagged 3 weeks, i.e., we will consider in our model what happened in the previous weeks to be able to predict in a better way the next month.
+2. Since we want to predict the deaths and confirmed cases in the following weeks,
+we should take into account how many deaths and confirmed cases were the weeks 
+before. Therefore, we will create some new variables which will be the deaths and
+confirmed cases 3 weeks lagged, i.e., we will consider in our model what happened
+in the previous weeks to be able to predict in a better way the next month.
 
 ```{r}
 spain <- spain %>%
@@ -519,8 +537,6 @@ spain <- spain %>%
   ) %>%
   drop_na()
 
-tail(c(1,2,3,3,5), 3)[1:2]
-
 spain_new_data <- spain_new_data %>%
   mutate(
     lag_3_deaths_week = tail(spain$deaths_week, 3)[1:2],
@@ -528,33 +544,70 @@ spain_new_data <- spain_new_data %>%
   )
 ```
 
-3. Before starting fitting models, we should take a look to our predictors. We have 13 which the majority of them are categorical variables, so we must do **feature selection**. To do that, we will use the package `recipeselectors`, which adds some feature selection methods to the `recipes` package, such as variable importance or boluta methods. This time we will use recursive feature elimination, selecting the features that are above the 20% of importance using a random forest model, which are the ones seen below:
+3. Before starting fitting models, we should take a look to our predictors. We have
+12 covariates which the majority of them are categorical, so we must do **feature selection**.
+To do that, we will use the package `recipeselectors` [@recipeselector], which adds
+some feature selection methods to the `recipes` package (from `tidymodels`) such
+as variable importance or boluta methods. This time we will use recursive feature
+elimination, selecting the features that are above the 20% of importance using a
+random forest model. For the model that predicts the deaths per week, it removes
+the variables `stay_home` and `gathering_restrictions`, nonetheless, for the confirmed
+cases, it removes `workplace_closing` and again `gathering_restrictions`.
 
 ```{r}
 rfe_model <- rand_forest() %>%
   set_engine("ranger", importance = "permutation") %>%
   set_mode("regression")
 
+# Predictive model for the deaths
 set.seed(1234)
-select_rec <- 
+select_rec_deaths <- 
   recipe(deaths_week ~ ., data = spain) %>%
   step_rm(date) %>%
   step_select_vip(all_predictors(), outcome = "deaths_week", model = rfe_model, threshold = 0.2)
 
-new_variables <- select_rec %>% prep() %>% juice()
-spain <- new_variables %>%
+spain_deaths <- select_rec_deaths %>% prep() %>% juice()
+spain_deaths <- spain_deaths %>%
   mutate(date = spain$date)
-head(select_rec %>% prep() %>% juice())
-# knitr::kable(head(select_rec %>% prep() %>% juice()))
+
+# Predictive model for the confirmed cases
+select_rec_confirmed <- 
+  recipe(confirmed_week ~ ., data = spain) %>%
+  step_rm(date) %>%
+  step_select_vip(all_predictors(), outcome = "confirmed_week", model = rfe_model, threshold = 0.2)
+
+
+spain_confirmed <- select_rec_confirmed %>% prep() %>% juice()
+spain_confirmed <- spain_confirmed%>%
+  mutate(date = spain$date)
+
+# head(select_rec %>% prep() %>% juice())
 ```
 
 
-4. Even though we will **test** our data with the next 3 weeks, we should divide our training data into folds to tune the model parameters and then to compare them. To do that, there is a function called `rolling_origin` from the `rsample` package which can divide our training set into different folds by date, which is very useful for time series models. We will get 10 folds where the analysis set will be the first 12 weeks and the assessment set, the following 3. This method will allow us to tune the different parameters of our models and get the best with the lowest prediction error. After selecting the best one, we will again fit the model in all our training set and then, we will see how it works in our test set.
+4. Even though we will **test** our data with the next 3 weeks, we should divide
+our training data into folds to tune the model parameters and to compare them. To
+do that, there is a function called `rolling_origin` from the `rsample` package
+(from `tidymodels`) which can divide our training set into different folds by date,
+which is very useful for time series models. We will get 10 folds where the analysis
+set will be the first 12 weeks, and the assessment set, the following 3. This method
+will allow us to tune the different parameters of our models and get the best with
+the lowest prediction error. After selecting the two best ones, we will again fit
+the models in all our training set and then, we will see how it works in our test
+set.
 
 ```{r}
 set.seed(123)
-spain_rolling <- rolling_origin(
-  spain, 
+spain_rolling_deaths <- rolling_origin(
+  spain_deaths, 
+  initial = 12, # number of weeks used to train in each resample
+  assess = 3, # number of weeks used to validate in each resample
+  cumulative = F,
+  skip = 4
+  )
+
+spain_rolling_confirmed <- rolling_origin(
+  spain_confirmed, 
   initial = 12, # number of weeks used to train in each resample
   assess = 3, # number of weeks used to validate in each resample
   cumulative = F,
@@ -565,14 +618,14 @@ spain_rolling <- rolling_origin(
 # assessment(spain_rolling$splits[[1]])
 ```
 
-5. Finally, it is time to 
-
+5. Finally, it is time to use the `recipes` package [@recipes] to do the preprocessing
+steps that the models need. For the linear regression models,
 
 ```{r}
 # Recipes
 basic_rec <- 
   recipe(deaths_week ~ ., data = spain) %>%
-  step_rm(date)
+  step_rm(date) # we remove the variable date
 
 linear_reg_rec <- 
   basic_rec %>%
@@ -675,6 +728,11 @@ stopCluster(cl)
 
 ```{r}
 workflow_results <- readRDS("workflow_results.RDS")
+
+workflow_results %>%
+  pull_workflow_set_result("linear_reg_ridge_wf") %>%
+  select_best()
+
 autoplot(workflow_results, select_best = T) +
   scale_color_tq() +
   theme_tq()
@@ -695,10 +753,36 @@ best_workflow <-
    finalize_workflow(best_results)
 ```
 
+```{r}
+linear_reg_ridge_res <- 
+   workflow_results %>% 
+   pull_workflow_set_result("linear_reg_ridge_wf") %>% 
+   select_best(metric = "rmse")
+
+linear_reg_ridge_wf <- 
+   workflow_results %>% 
+   pull_workflow("linear_reg_ridge_wf") %>% 
+   finalize_workflow(linear_reg_ridge_res)
+
+linear_reg_ridge_fit <- linear_reg_ridge_wf %>%
+  fit(spain)
+
+linear_reg_ridge_fit %>%
+  pull_workflow_fit()
+
+plot(linear_reg_ridge_fit$fit$fit$fit)
+```
+
+
 ```{r, results='hide'}
 # Fit the model
 best_fit <- best_workflow %>%
   fit(data = spain)
+
+best_fit$fit$fit$fit$names
+best_fit %>%
+  pull_workflow_fit()
+plotVar(best_fit$fit$fit$fit)
 
 # Predictions in the training and testing sets
 pred_train <- best_fit %>%
