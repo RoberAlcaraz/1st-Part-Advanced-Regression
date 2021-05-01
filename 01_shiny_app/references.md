@@ -8,4 +8,8 @@
 
 - Guidotti, E., Ardia, D., (2020), "COVID-19 Data Hub", Journal of Open Source Software 5(51):2376.
 
+- Steven Pawley (2021). recipeselectors: Extra Recipes Steps for
+  Supervised Feature Selection. R package version 0.0.1.
+  https://github.com/stevenpawley/recipeselectors
+
 - Kuhn, Max, and Kjell Johnson. 2019. “Feature Selection Overview.” In, 227–40. Chapman; Hall/CRC.
