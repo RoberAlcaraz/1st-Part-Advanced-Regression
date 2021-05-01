@@ -623,18 +623,18 @@ steps that the models need. For the linear regression models,
 
 ```{r}
 # Recipes
-basic_rec <- 
-  recipe(deaths_week ~ ., data = spain) %>%
+basic_rec_deaths <- 
+  recipe(deaths_week ~ ., data = spain_deaths) %>%
   step_rm(date) # we remove the variable date
 
-linear_reg_rec <- 
-  basic_rec %>%
+linear_reg_rec_deaths <- 
+  basic_rec_deaths %>%
   step_nzv(all_numeric_predictors(), freq_cut = 85/5) %>% # remove the zero variance variables
   step_corr(all_numeric_predictors(), threshold = 0.65) %>% # decorrelate predictors
   step_dummy(all_nominal_predictors()) # get dummy variables
   
-pls_rec <- 
-  basic_rec %>%
+pls_rec_deaths <- 
+  basic_rec_deaths %>%
   step_nzv(all_numeric_predictors(), freq_cut = 85/5) %>% # remove the zero variance variables 
   step_normalize(all_numeric_predictors()) %>% # center and scale
   step_dummy(all_nominal_predictors()) # get dummy variables
@@ -673,8 +673,8 @@ pls_model <-
 ```{r}
 workflow_tune_compare <- workflow_set(
   preproc = list(
-    linear_reg = linear_reg_rec,
-    pls        = pls_rec
+    linear_reg_deaths = linear_reg_rec_deaths,
+    pls_deaths        = pls_rec_deaths
   ),
   models = list(
     lm_wf            = lm_model,
@@ -687,7 +687,7 @@ workflow_tune_compare <- workflow_set(
 )
 
 workflow_tune_compare <- workflow_tune_compare %>%
-  filter(wflow_id == c("linear_reg_lm_wf", "linear_reg_ridge_wf", "linear_reg_lasso_wf", "linear_reg_elastic_net_wf", "pls_model_wf"))
+  filter(wflow_id == c("linear_reg_deaths_lm_wf", "linear_reg_deaths_ridge_wf", "linear_reg_deaths_lasso_wf", "linear_reg_deaths_elastic_net_wf", "pls_deaths_model_wf"))
 ```
 
 ```{r, eval=F}
@@ -703,7 +703,7 @@ grid_ctrl <-
 workflow_results <- workflow_tune_compare %>%
   workflow_map(
     seed = 1503,
-    resamples = spain_rolling,
+    resamples = spain_rolling_deaths,
     grid = 25,
     control = grid_ctrl,
     verbose = T
@@ -730,34 +730,73 @@ stopCluster(cl)
 workflow_results <- readRDS("workflow_results.RDS")
 
 workflow_results %>%
-  pull_workflow_set_result("linear_reg_ridge_wf") %>%
-  select_best()
-
+  rank_results(select_best = T) %>%
+  filter(.metric == "rmse")
 autoplot(workflow_results, select_best = T) +
   scale_color_tq() +
   theme_tq()
 ```
 
-
+# Puebas 
 
 ```{r}
-best_results <- 
-   workflow_results %>% 
-   pull_workflow_set_result("pls_model_wf") %>% 
-   select_best(metric = "rmse")
-best_results
+ridge_param <- ridge_model %>%
+  parameters() %>%
+  update(penalty = penalty(c(1.538034e-10-1e-5, 1.538034e-10+1e-5)))
+  
+workflow_tune_compare <- workflow_tune_compare %>%
+  option_add(param_info = ridge_param, id = "linear_reg_deaths_ridge_wf")
 
-best_workflow <- 
+workflow_tune_compare$option 
+
+linear_reg_ridge_wf <- 
    workflow_results %>% 
-   pull_workflow("pls_model_wf") %>% 
-   finalize_workflow(best_results)
+   pull_workflow("linear_reg_ridge_wf") %>% 
+   finalize_workflow(linear_reg_ridge_res)
+```
+
+
+```{r, eval=F}
+cl <- makePSOCKcluster(8)
+registerDoParallel(cl)
+
+grid_ctrl <-
+   control_grid(
+      save_pred = TRUE,
+      save_workflow = TRUE
+   )
+
+workflow_results <- workflow_tune_compare %>%
+  workflow_map(
+    seed = 1503,
+    resamples = spain_rolling_deaths,
+    grid = 25,
+    control = grid_ctrl,
+    verbose = T
+   )
+
+# i	No tuning parameters. `fit_resamples()` will be attempted
+# i 1 of 5 resampling: linear_reg_lm
+# v 1 of 5 resampling: linear_reg_lm (10.7s)
+# i 2 of 5 tuning:     linear_reg_ridge
+# v 2 of 5 tuning:     linear_reg_ridge (3.3s)
+# i 3 of 5 tuning:     linear_reg_lasso
+# v 3 of 5 tuning:     linear_reg_lasso (2.8s)
+# i 4 of 5 tuning:     linear_reg_elastic_net
+# v 4 of 5 tuning:     linear_reg_elastic_net (57.6s)
+# i 5 of 5 tuning:     pls_pls
+# v 5 of 5 tuning:     pls_pls (59s)
+
+stopCluster(cl)
+
+# saveRDS(workflow_results, "workflow_results.RDS")
 ```
 
 ```{r}
 linear_reg_ridge_res <- 
    workflow_results %>% 
-   pull_workflow_set_result("linear_reg_ridge_wf") %>% 
-   select_best(metric = "rmse")
+   pull_workflow_set_result("linear_reg_deaths_ridge_wf") %>% 
+   select_best(metric = "rmse") 
 
 linear_reg_ridge_wf <- 
    workflow_results %>% 
@@ -771,6 +810,23 @@ linear_reg_ridge_fit %>%
   pull_workflow_fit()
 
 plot(linear_reg_ridge_fit$fit$fit$fit)
+```
+
+################3
+
+
+```{r}
+best_results <- 
+   workflow_results %>% 
+   pull_workflow_set_result("pls_model_wf") %>% 
+   select_best(metric = "rmse")
+best_results
+
+
+best_workflow <- 
+   workflow_results %>% 
+   pull_workflow("pls_model_wf") %>% 
+   finalize_workflow(best_results)
 ```
 
 
