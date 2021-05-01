@@ -61,20 +61,35 @@ knitr::opts_chunk$set(warning = FALSE,
 
 # INTRODUCTION
 
-The aim of this project is to analyze the coronavirus pandemic (COVID-19) in Spain in general, and in Castilla-La Mancha and Comunidad de Madrid regions, in particular, in order to see what would have happened if policy measures had been taken before. The data has been taken from the R package `COVID19` [@guidotti2020].
+The aim of this project is to analyze and try to predict the confirmed cases and 
+deaths due to the coronavirus pandemic (COVID-19) in Spain using regression tools.
+It started the 31st of January of 2020 in La Gomera (Canary Island) and continues
+until now, having almost 2.5 million confirmed cases and around 67k deaths[@wiki].
+
+All the analysis of this project, from the data cleaning until the model results
+will be done mainly with the `tidyverse`[@tidyverse] and `tidymodels`[@tidymodels]
+packages. The first one is well known for `R` users but the second, even though 
+is still in development, has enough tools for modeling and machine learning.
+
+In the second section, we will see from where we obtained the data and how to clean
+it. In the third one, we will explore our data by doing some visualizations and
+we will think about how to adress the problem. In the fourth one, we will do some
+feature engineering, i.e., we will modify and create some variables, divide our
+training data into folds to compare our models, and many other necessary steps 
+before start modeling. In the next one, we will tune our model parameters and fit
+the models. Finally, in the last section, we will select the best model and say
+some conclussions.
 
 ```{r}
-spain <- readRDS("data/spain.RDS")
-spain_new_data <- readRDS("data/spain_new_data.RDS")
+spain <- readRDS("00_data/spain.RDS")
+spain_new_data <- readRDS("00_data/spain_new_data.RDS")
 ```
 
 # DATA CLEANING
 
-<https://covid19datahub.io/articles/doc/data.html>
+The data has been taken from the R package `COVID19` [@guidotti2020]. These COVID-19 data sets contain 446 observations, which are the days from the 22nd of January 2020 until the 11th of March 2021, with 36 variables divided in 5 categories: *identifiers*, *COVID-19 variables*, *policy measures*, *geographic information* and *external keys*.
 
-These three COVID-19 data sets contain 446 observations, which are the days from the 22nd of January 2020 until the 11th of March 2021, and 36 and 38 variables for Spain and the regions respectively, divided in 5 categories: *identifiers*, *COVID-19 variables*, *policy measures*, *geographic information* and *external keys*.
-
-Regarding the identifiers, we will select both variables: `id`, which denote the country or the region, and date. In the second group, we have variables related with the COVID-19 such as the cumulative number of deaths, confirmed cases, test, etc. For the moment, we will select all of them and then we will decide. In the policy measures, we have very important variables for the development of the pandemic and for our study, like `workplace_closing`, `stay_home_restrictions` or `internal_movement_restrictions`, so we must take them into account. Finally, there are other geographical variables that could be interesting for our models. A description of our variables can be seen below:
+Regarding the identifiers, we will select only date. In the second group, we have variables related with the COVID-19 such as the cumulative number of deaths, confirmed cases, test, etc. For the moment, we will select all of them and then we will decide. In the policy measures, we have very important variables for the development of the pandemic and for our study, like `workplace_closing`, `stay_home_restrictions` or `internal_movement_restrictions`, so we must take them into account. Finally, there are other geographical variables that could be interesting for our models. A description of our variables can be seen below:
 
 ```{r, eval=F}
 skimr::skim(spain)
@@ -514,7 +529,7 @@ pls_rec <-
   step_dummy(all_nominal_predictors()) # get dummy variables
 ```
 
-# MODEL TUNING AND SELECTION
+# MODEL TUNING
 
 ```{r}
 # Models
@@ -656,8 +671,7 @@ spain %>%
   ) 
 ```
 
-
-
+# MODEL SELECTION AND CONCLUSIONS 
 
 
 # REFERENCES
