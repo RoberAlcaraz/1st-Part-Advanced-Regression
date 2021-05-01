@@ -64,10 +64,10 @@ knitr::opts_chunk$set(warning = FALSE,
 The aim of this project is to analyze and try to predict the confirmed cases and 
 deaths due to the coronavirus pandemic (COVID-19) in Spain using regression tools.
 It started the 31st of January of 2020 in La Gomera (Canary Island) and continues
-until now, having almost 2.5 million confirmed cases and around 67k deaths[@wiki].
+until now, having almost 2.5 million confirmed cases and around 67k deaths.
 
 All the analysis of this project, from the data cleaning until the model results
-will be done mainly with the `tidyverse`[@tidyverse] and `tidymodels`[@tidymodels]
+will be done mainly with the `tidyverse` [@tidyverse] and `tidymodels` [@tidymodels]
 packages. The first one is well known for `R` users but the second, even though 
 is still in development, has enough tools for modeling and machine learning.
 
