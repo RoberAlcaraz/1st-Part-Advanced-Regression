@@ -639,12 +639,14 @@ pls_rec_confirmed <-
 ```
 
 \bigskip
-After defining all these steps, we are able to start creating our models. In the next section, we are going to explain the models we are going to analyze as well as the parameters we are going to tune.
+After defining all these steps, we are able to start creating our models. In the next section, we are going to explain the models we are going to analyze as well as all the steps that need to be followed to create a good model.
 
 \newpage
 # MODEL TUNING AND VALIDATION
 
+\bigskip
 As we have said in the previous section, we are going to try 5 different models:
+\bigskip
 
 - A simple linear model (`lm`),
 
@@ -659,9 +661,6 @@ tune also the `mixture` parameter, then we get a elastic net model.
 - A partial least squares model (`PLS`), when we have to tune two parameters: 
 `predictor_prop`, which is the proportion of predictors that are allowed to affect
 each PLS component, and `num_comp`, which is the number of PLS components.
-
-Therefore, we will tune the parameters and we will select the set of them that 
-minimizes the root mean square error (`rmse`) and the ordinal r-square (`rsq`).
 
 ```{r}
 # Models
@@ -690,6 +689,8 @@ pls_model <-
   set_mode('regression')
 ```
 
+\bigskip
+Thanks to the `workflowsets` package [@workflowsets], we can create two sets of **workflows** (pipelines in python), one for the deaths model and the other for the confirmed cases. A workflow is an object which is formed by a recipe and a model. 
 
 ```{r}
 # Deaths
@@ -730,6 +731,11 @@ workflow_tune_confirmed <- workflow_set(
 workflow_tune_confirmed <- workflow_tune_confirmed %>%
   filter(wflow_id == c("linear_reg_confirmed_lm_wf", "linear_reg_confirmed_ridge_wf", "linear_reg_confirmed_lasso_wf", "linear_reg_confirmed_elastic_net_wf", "pls_confirmed_model_wf"))
 ```
+
+
+After defining these models, it is time to tune their parameters. With the R package `doParallel` [@doParallel], we are able to select the number of cores in order to decrease the computational time. In my computer, using 8 cores instead of 4 decreases more than half the computational time, which helps a lot. Next, we modify the intervals of the model parameters, and we will select the set of them that 
+minimizes the root mean square error (`rmse`) and the ordinal r-square (`rsq`). Below, we can see the results for the deaths model:
+
 
 ```{r, eval=F}
 # Deaths
@@ -802,6 +808,7 @@ stopCluster(cl)
 
 # saveRDS(workflow_results_confirmed, "workflow_results_confirmed.RDS")
 ```
+
 
 ```{r}
 # Updating the set of tuning parameters for DEATHS
@@ -970,20 +977,18 @@ workflow_results_confirmed <- readRDS("workflow_results_confirmed.RDS")
 workflow_results_confirmed_tuned <- readRDS("workflow_results_confirmed_tuned.RDS")
 ```
 
-```{r}
-# workflow_results_deaths %>%
-#   rank_results(select_best = T) %>%
-#   filter(.metric == "rmse")
+
+
+
+```{r, fig.cap="Results for the deaths models"}
 # workflow_results_deaths_tuned %>%
 #   rank_results(select_best = T) %>%
 #   filter(.metric == "rmse")
-# 
-# workflow_results_confirmed %>%
-#   rank_results(select_best = T) %>%
-#   filter(.metric == "rmse")
+
 # workflow_results_confirmed_tuned %>%
 #   rank_results(select_best = T) %>%
-#   filter(.metric == "rmse")
+#   filter(.metric == "rsq")
+
 
 autoplot(workflow_results_deaths_tuned, select_best = T) +
   ggtitle("Results for the deaths model") +
@@ -992,15 +997,32 @@ autoplot(workflow_results_deaths_tuned, select_best = T) +
   theme_tq()
 ```
 
-```{r, fig.cap="Results for both models"}
+As we can observe above, there is a big difference between the partial least squares model and the rest. In the same way, as we can see for the models of confirmed cases, the one with the best metrics is the partial least squares, but for the next one, for instance, although the lasso model is the last one in `rmse`, it is the second in `rsq`
+
+
+```{r, fig.cap="Results for the confirmed cases models"}
 autoplot(workflow_results_confirmed_tuned, select_best = T) +
   scale_color_tq() +
-  ggtitle("Results for the confirmed cases model") +
+  ggtitle("Results for the confirmed cases models") +
   theme(plot.title = element_text(hjust = 0.5, size = 20)) +
   theme_tq()
 ```
 
 # MODEL SELECTION AND CONCLUSIONS 
+
+As we have seen in the previous chapter, the best model for both cases is the **Partial Least Squares (PLS) regression**. As we briefly described before, it is a statistical method that is related with the principal components regression. It reduces the predictors to a smaller set of uncorrelated components and perform least squares regression with these components instead of using the original data. For both models, we can observe the final parameters:
+
+
+|    *Model*    |`predictor_prop`|`num_comp`|
+|---------------|----------------|----------|
+|Deaths         |     0.1344     |3         |
+|Confirmed cases|     0.5607     |2         |
+:Final set of parameters for each model
+
+
+The first parameter, `predictor_prop`, indicates the proportion of variables that are used in every PLS component. Since we have 24 predictors after the preprocessing, 4 and 13 variables are used on each of the sPLS components. The second parameter indicates the number of PLS components that are used as predictors in each model.
+
+Consecutively, we have to *finalize* the workflows, i.e., we have to give the best set of parameters to each model. And now, we are able to fit the model **in all the training set**, since the previous folds were used only to get these parameters.
 
 
 ```{r}
@@ -1037,6 +1059,20 @@ best_fit_confirmed <- best_workflow_confirmed %>%
   fit(spain)
 ```
 
+After fitting the models, in order to see some characteristics of them, we can plot
+a *Correlation Circle Plot*, which represents the two components and projects the 
+variables in the plane defined by them. Strongly associated or correlated variables
+are plotted in the same direction. The greater the distance from the origin the 
+stronger the association. For the deaths model, we can observe two main groups that
+are very correlated with the outcome, however, for the confirmed model, some variables
+appear in the center of the model, i.e., they are not so correlated. 
+
+```{r}
+par(mfrow = c(1,2))
+plotVar(best_fit_deaths$fit$fit$fit)
+plotVar(best_fit_confirmed$fit$fit$fit)
+```
+
 
 ```{r}
 pred_train_deaths <- best_fit_deaths %>%
@@ -1069,7 +1105,9 @@ p2 <- spain %>%
     x = "Date"
   ) 
 
-p1+p2
+ggarrange(p1, p2) +
+  ggtitle("Results in the train set for both models") +
+  theme(plot.title = element_text(hjust = 0.5, size = 20))
 ```
 
 ```{r}
