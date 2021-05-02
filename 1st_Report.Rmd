@@ -1013,8 +1013,8 @@ autoplot(workflow_results_confirmed_tuned, select_best = T) +
 As we have seen in the previous chapter, the best model for both cases is the **Partial Least Squares (PLS) regression**. As we briefly described before, it is a statistical method that is related with the principal components regression. It reduces the predictors to a smaller set of uncorrelated components and perform least squares regression with these components instead of using the original data. For both models, we can observe the final parameters:
 
 
-|    *Model*    |`predictor_prop`|`num_comp`|
-|---------------|----------------|----------|
+|  **Model**    |`predictor_prop`|`num_comp`|
+|---------------|:--------------:|:--------:|
 |Deaths         |     0.1344     |3         |
 |Confirmed cases|     0.5607     |2         |
 :Final set of parameters for each model
@@ -1067,10 +1067,8 @@ stronger the association. For the deaths model, we can observe two main groups t
 are very correlated with the outcome, however, for the confirmed model, some variables
 appear in the center of the model, i.e., they are not so correlated. 
 
-```{r}
-par(mfrow = c(1,2))
+```{r, fig.cap="Correlation Circle Plot for the deaths model"}
 plotVar(best_fit_deaths$fit$fit$fit)
-plotVar(best_fit_confirmed$fit$fit$fit)
 ```
 
 
