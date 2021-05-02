@@ -36,7 +36,7 @@ pacman::p_load(ranger, mixOmics, plsmod)
 # devtools::install_github("stevenpawley/recipeselectors")
 pacman::p_load(COVID19, tidyverse, tidymodels, rsample, recipes, parsnip, 
                yardstick, workflows, tune, patchwork, lubridate, recipeselectors,
-               doParallel, tidyquant, finetune)
+               doParallel, tidyquant, finetune, ggpubr)
 library(tidyverse)
 # For ggplot
 theme_set(theme_tq())
@@ -55,7 +55,7 @@ knitr::opts_chunk$set(warning = FALSE,
                       eval = T,
                       fig.pos="H", 
                       fig.align="center",
-                      fig.width=12,
+                      fig.width=11,
                       cache=FALSE, error = TRUE)
 ```
 
@@ -78,13 +78,14 @@ feature engineering, i.e., we will modify and create some variables, divide our
 training data into folds to compare our models, and many other necessary steps 
 before start modeling. In the next one, we will tune our model parameters and fit
 the models. Finally, in the last section, we will select the best model and say
-some conclussions.
+some conclusions.
 
 ```{r}
 spain <- readRDS("00_data/spain.RDS")
 spain_new_data <- readRDS("00_data/spain_new_data.RDS")
 ```
 
+\bigskip
 # DATA CLEANING
 
 The data has been taken from the R package `COVID19` [@guidotti2020]. This COVID-19
@@ -243,7 +244,7 @@ spain_new_data <- spain_new_data %>%
 After these changes, in the next section we will perform some visualizations to 
 know the distributions of the variables, relationship between them, etc.
 
-
+\bigskip
 # EXPLORATORY DATA ANALYSIS (EDA)
 
 Our two main variables of interest are cumulative `deaths` and `confirmed` cases.
@@ -258,7 +259,9 @@ p2 <- spain %>%
   ggplot(aes(x = date, y = confirmed)) +
   geom_line()
 
-p1 + p2 
+ggarrange(p1, p2) +
+  ggtitle("Cumulative deaths and confirmed cases") +
+  theme(plot.title = element_text(hjust = 0.5, size = 20))
 ```
 
 As we can observe, there are some mistakes in the data: in the cumulative deaths,
@@ -283,12 +286,14 @@ p2 <- spain %>%
   ggplot(aes(x = date, y = confirmed)) +
   geom_line()
 
-p1 + p2 
+ggarrange(p1, p2) +
+  ggtitle("Cumulative deaths and confirmed cases fixed") +
+  theme(plot.title = element_text(hjust = 0.5, size = 20))
 ```
 
 Now let's focus on the vaccines administered and the hospitalized people:
 
-```{r}
+```{r, fig.cap="Cumulative vaccines, number of hospitalized people and number of patients in ICUs on date"}
 p1 <- spain %>%
   ggplot(aes(x = date, y = vaccines)) +
   geom_line(na.rm = T)
@@ -332,41 +337,30 @@ Then, we are going to see the relationships between our target variables, deaths
 and confirmed cases, and some of the categorical predictors. Below, we can see how
 predictors like `stay_home`, `workplace_closing`, `gatherings_restrictions` and `internal_movement_restrictions` are related with the confirmed cases:
 
-```{r}
+```{r, fig.cap="Relationship between the cumulative confirmed cases and some categorical variables", fig.width=8.7}
 p1 <- spain %>%
   ggplot(aes(x = date, y = confirmed, color = stay_home)) +
-  labs(y = " ", x = "") +
-  ggtitle("Confirmed cases") +
-  theme(
-    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
-    ) + 
+  labs(y = " ", x = "") + 
   geom_point()
 
 p2 <- spain %>%
   ggplot(aes(x = date, y = confirmed, color = workplace_closing)) +
-  labs(y = " ") +
-  theme(
-    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
-    ) + 
+  labs(y = " ") + 
   geom_point()
 
 p3 <- spain %>%
   ggplot(aes(x = date, y = confirmed, color = gatherings_restrictions)) +
-  labs(y = " ", x = "") +
-  theme(
-    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
-    ) + 
+  labs(y = " ", x = "") + 
   geom_point()
 
 p4 <- spain %>%
   ggplot(aes(x = date, y = confirmed, color = internal_movement_restrictions)) +
-  labs(y = " ") +
-  theme(
-    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
-    ) + 
+  labs(y = " ") + 
   geom_point()
 
-(p1 / p2) | (p3 / p4)
+ggarrange(p1, p3, p2, p4, ncol = 2, nrow = 2) +
+  ggtitle("Cumulative confirmed cases") +
+  theme(plot.title = element_text(hjust = 0.5, size = 20))
 ```
 
 The first plot in the top left corner shows us that the variable `stay_home` is 
@@ -381,41 +375,30 @@ spain_new_data$stay_home <- "recommended"
 ```
 
 
-```{r}
+```{r, fig.cap="Relationship between the cumulative deaths and some categorical variables", fig.width=8.7}
 p1 <- spain %>%
   ggplot(aes(x = date, y = deaths, color = stay_home)) +
   labs(y = " ", x = "") +
-  ggtitle("Deaths") +
-  theme(
-    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
-    ) + 
   geom_point()
 
 p2 <- spain %>%
   ggplot(aes(x = date, y = deaths, color = workplace_closing)) +
   labs(y = " ") +
-  theme(
-    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
-    ) + 
   geom_point()
 
 p3 <- spain %>%
   ggplot(aes(x = date, y = deaths, color = gatherings_restrictions)) +
   labs(y = " ", x = "") +
-  theme(
-    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
-    ) + 
   geom_point()
 
 p4 <- spain %>%
   ggplot(aes(x = date, y = deaths, color = internal_movement_restrictions)) +
   labs(y = " ") +
-  theme(
-    legend.title = element_text(size = 10), legend.text = element_text(size = 8)
-    ) + 
   geom_point()
 
-(p1 / p2) | (p3 / p4)
+ggarrange(p1, p3, p2, p4, ncol = 2, nrow = 2) +
+  ggtitle("Cumulative deahts") +
+  theme(plot.title = element_text(hjust = 0.5, size = 20))
 ```
 
 Again, after summer the measures become more agressive due to the new cases. In 
@@ -423,10 +406,10 @@ the following section, we will see how to modify some variables after we have mo
 knowledge about them.
 
 
-
+\bigskip
 # FEATURE ENGINEERING
 
-
+\bigskip
 In this section, based on the previous analysis of the variables, we should decide
 which changes should be done in our data. Firslty, since our variables of interest,
 deaths and confirmed cases, are cumulative and daily, we will aggregate them to 
@@ -439,8 +422,7 @@ On the one hand, to obtain the number of deaths, confirmed cases and vaccines pe
 week, we will compute firstly the daily cases, substracting today's cases minus 
 tomorrow's, and then we will add all the cases of the week. On the other hand, for
 the categorical variables, we will compute the mode of the variables in every week,
-i.e., we will give the most frequent values to every week. Below, we can our new
-data set:
+i.e., we will give the most frequent values to every week.
 
 ```{r}
 calculate_mode <- function(x) {
@@ -498,13 +480,11 @@ spain_new_data <- spain_new_data %>%
   select(-new_date)
 ```
 
-```{r}
-knitr::kable(head(spain))
-```
-
 Now that we have prepared our data, we have to think about what **preprocessing**
 steps should we do. These are some changes that we have to apply to our data before
 we start fitting the models. Our preprocessing steps will be:
+\bigskip
+
 
 1. Divide the date in month and year and convert it to categorical, because they
 could be very important for the outcomes.
@@ -619,10 +599,10 @@ spain_rolling_confirmed <- rolling_origin(
 ```
 
 5. Finally, it is time to use the `recipes` package [@recipes] to do the preprocessing
-steps that the models need. For the linear regression models,
+steps that the models need. For the linear regression models (`lm`, `ridge`, `lasso` and `elastic net`), the recommended preprocessing is to remove the zero variance variables, decorrelate the predictors and create dummy variables for the categorical predictors; and for the partial least squares (PLS), we need to normalize the predictors, i.e., transform them to have mean equal to 0 and variance equal to 1.
 
 ```{r}
-# Recipes
+# Recipes for the deaths model
 basic_rec_deaths <- 
   recipe(deaths_week ~ ., data = spain_deaths) %>%
   step_rm(date) # we remove the variable date
@@ -638,9 +618,50 @@ pls_rec_deaths <-
   step_nzv(all_numeric_predictors(), freq_cut = 85/5) %>% # remove the zero variance variables 
   step_normalize(all_numeric_predictors()) %>% # center and scale
   step_dummy(all_nominal_predictors()) # get dummy variables
+
+
+# Recipes for the confirmed model
+basic_rec_confirmed <- 
+  recipe(confirmed_week ~ ., data = spain_confirmed) %>%
+  step_rm(date) # we remove the variable date
+
+linear_reg_rec_confirmed <- 
+  basic_rec_confirmed %>%
+  step_nzv(all_numeric_predictors(), freq_cut = 85/5) %>% # remove the zero variance variables
+  step_corr(all_numeric_predictors(), threshold = 0.65) %>% # decorrelate predictors
+  step_dummy(all_nominal_predictors()) # get dummy variables
+  
+pls_rec_confirmed <- 
+  basic_rec_confirmed %>%
+  step_nzv(all_numeric_predictors(), freq_cut = 85/5) %>% # remove the zero variance variables 
+  step_normalize(all_numeric_predictors()) %>% # center and scale
+  step_dummy(all_nominal_predictors()) # get dummy variables
 ```
 
-# MODEL TUNING
+\bigskip
+After defining all these steps, we are able to start creating our models. In the next section, we are going to explain the models we are going to analyze as well as the parameters we are going to tune.
+
+\newpage
+# MODEL TUNING AND VALIDATION
+
+As we have said in the previous section, we are going to try 5 different models:
+
+- A simple linear model (`lm`),
+
+- Three different models from the `glmnet` package: ridge, lasso and elastic net
+regression. The difference between these three models is the parameter tuning. We
+have two parameters to tune: `penalty`, which represents the total amount of 
+regularization, and `mixture`, which is a number between 0 and 1 that indicates 
+the proportion of L1 regularization in the model. When `mixture = 0`, we get
+a ridge model but when `mixture = 1` we get a lasso model. When we decide to 
+tune also the `mixture` parameter, then we get a elastic net model.
+
+- A partial least squares model (`PLS`), when we have to tune two parameters: 
+`predictor_prop`, which is the proportion of predictors that are allowed to affect
+each PLS component, and `num_comp`, which is the number of PLS components.
+
+Therefore, we will tune the parameters and we will select the set of them that 
+minimizes the root mean square error (`rmse`) and the ordinal r-square (`rsq`).
 
 ```{r}
 # Models
@@ -671,7 +692,8 @@ pls_model <-
 
 
 ```{r}
-workflow_tune_compare <- workflow_set(
+# Deaths
+workflow_tune_deaths <- workflow_set(
   preproc = list(
     linear_reg_deaths = linear_reg_rec_deaths,
     pls_deaths        = pls_rec_deaths
@@ -686,11 +708,31 @@ workflow_tune_compare <- workflow_set(
   cross = T
 )
 
-workflow_tune_compare <- workflow_tune_compare %>%
+workflow_tune_deaths <- workflow_tune_deaths %>%
   filter(wflow_id == c("linear_reg_deaths_lm_wf", "linear_reg_deaths_ridge_wf", "linear_reg_deaths_lasso_wf", "linear_reg_deaths_elastic_net_wf", "pls_deaths_model_wf"))
+
+# Confirmed
+workflow_tune_confirmed <- workflow_set(
+  preproc = list(
+    linear_reg_confirmed = linear_reg_rec_confirmed,
+    pls_confirmed        = pls_rec_confirmed
+  ),
+  models = list(
+    lm_wf            = lm_model,
+    ridge_wf         = ridge_model,
+    lasso_wf         = lasso_model,
+    elastic_net_wf   = elastic_net_model,
+    model_wf         = pls_model
+  ), 
+  cross = T
+)
+
+workflow_tune_confirmed <- workflow_tune_confirmed %>%
+  filter(wflow_id == c("linear_reg_confirmed_lm_wf", "linear_reg_confirmed_ridge_wf", "linear_reg_confirmed_lasso_wf", "linear_reg_confirmed_elastic_net_wf", "pls_confirmed_model_wf"))
 ```
 
 ```{r, eval=F}
+# Deaths
 cl <- makePSOCKcluster(8)
 registerDoParallel(cl)
 
@@ -700,7 +742,7 @@ grid_ctrl <-
       save_workflow = TRUE
    )
 
-workflow_results <- workflow_tune_compare %>%
+workflow_results_deaths <- workflow_tune_deaths %>%
   workflow_map(
     seed = 1503,
     resamples = spain_rolling_deaths,
@@ -710,166 +752,349 @@ workflow_results <- workflow_tune_compare %>%
    )
 
 # i	No tuning parameters. `fit_resamples()` will be attempted
-# i 1 of 5 resampling: linear_reg_lm
-# v 1 of 5 resampling: linear_reg_lm (10.7s)
-# i 2 of 5 tuning:     linear_reg_ridge
-# v 2 of 5 tuning:     linear_reg_ridge (3.3s)
-# i 3 of 5 tuning:     linear_reg_lasso
-# v 3 of 5 tuning:     linear_reg_lasso (2.8s)
-# i 4 of 5 tuning:     linear_reg_elastic_net
-# v 4 of 5 tuning:     linear_reg_elastic_net (57.6s)
-# i 5 of 5 tuning:     pls_pls
-# v 5 of 5 tuning:     pls_pls (59s)
+# i 1 of 5 resampling: linear_reg_deaths_lm_wf
+# v 1 of 5 resampling: linear_reg_deaths_lm_wf (10.1s)
+# i 2 of 5 tuning:     linear_reg_deaths_ridge_wf
+# v 2 of 5 tuning:     linear_reg_deaths_ridge_wf (3.3s)
+# i 3 of 5 tuning:     linear_reg_deaths_lasso_wf
+# v 3 of 5 tuning:     linear_reg_deaths_lasso_wf (2.9s)
+# i 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf
+# v 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf (41.6s)
+# i 5 of 5 tuning:     pls_deaths_model_wf
+# v 5 of 5 tuning:     pls_deaths_model_wf (46.7s)
 
 stopCluster(cl)
 
-# saveRDS(workflow_results, "workflow_results.RDS")
+# saveRDS(workflow_results_deaths, "workflow_results_deaths.RDS")
+
+# Confirmed
+cl <- makePSOCKcluster(8)
+registerDoParallel(cl)
+
+grid_ctrl <-
+   control_grid(
+      save_pred = TRUE,
+      save_workflow = TRUE
+   )
+
+workflow_results_confirmed <- workflow_tune_confirmed %>%
+  workflow_map(
+    seed = 1503,
+    resamples = spain_rolling_confirmed,
+    grid = 25,
+    control = grid_ctrl,
+    verbose = T
+   )
+
+# i	No tuning parameters. `fit_resamples()` will be attempted
+# i 1 of 5 resampling: linear_reg_confirmed_lm_wf
+# v 1 of 5 resampling: linear_reg_confirmed_lm_wf (12.1s)
+# i 2 of 5 tuning:     linear_reg_confirmed_ridge_wf
+# v 2 of 5 tuning:     linear_reg_confirmed_ridge_wf (3.6s)
+# i 3 of 5 tuning:     linear_reg_confirmed_lasso_wf
+# v 3 of 5 tuning:     linear_reg_confirmed_lasso_wf (3.1s)
+# i 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf
+# v 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf (43.2s)
+# i 5 of 5 tuning:     pls_confirmed_model_wf
+# v 5 of 5 tuning:     pls_confirmed_model_wf (46.5s)
+
+stopCluster(cl)
+
+# saveRDS(workflow_results_confirmed, "workflow_results_confirmed.RDS")
 ```
 
 ```{r}
-workflow_results <- readRDS("workflow_results.RDS")
+# Updating the set of tuning parameters for DEATHS
+# With the commented lines, we get the current best parameter, and we make a grid
+# around them
 
-workflow_results %>%
-  rank_results(select_best = T) %>%
-  filter(.metric == "rmse")
-autoplot(workflow_results, select_best = T) +
+# workflow_results_deaths %>% 
+#   pull_workflow_set_result("linear_reg_deaths_ridge_wf") %>% 
+#   select_best(metric = "rmse") 
+ridge_param <- ridge_model %>%
+  parameters() %>%
+  update(penalty = penalty(c(1.538034e-10-1e-10, 1.538034e-10+1e-10)))
+
+# workflow_results_deaths %>% 
+#   pull_workflow_set_result("linear_reg_deaths_lasso_wf") %>% 
+#   select_best(metric = "rmse")
+lasso_param <- lasso_model %>%
+  parameters() %>%
+  update(penalty = penalty(c(1.538034e-10-1e-10, 1.538034e-10+1e-10)))
+
+# workflow_results_deaths %>% 
+#   pull_workflow_set_result("linear_reg_deaths_elastic_net_wf") %>% 
+#   select_best(metric = "rmse")
+en_param <- elastic_net_model %>%
+  parameters() %>%
+  update(penalty = penalty(c(2.652128e-05-1e-5, 2.652128e-05+1e-5)),
+         mixture = mixture(c(0.9843659-0.01, 0.9843659+0.01)))
+
+# workflow_results_deaths %>% 
+#   pull_workflow_set_result("pls_deaths_model_wf") %>% 
+#   select_best(metric = "rmse")
+pls_param <- pls_model %>%
+  parameters() %>%
+  update(predictor_prop = predictor_prop(c(0.1088969-0.05, 0.1088969+0.05)),
+         num_comp = num_comp(c(3-2, 3+2)))
+  
+# After that, we add them to the workflow
+workflow_tune_deaths <- workflow_tune_deaths %>%
+  option_add(param_info = ridge_param, id = "linear_reg_deaths_ridge_wf") %>%
+  option_add(param_info = lasso_param, id = "linear_reg_deaths_lasso_wf") %>%
+  option_add(param_info = en_param, id = "linear_reg_deaths_elastic_net_wf") %>%
+  option_add(param_info = pls_param, id = "pls_deaths_model_wf")
+```
+
+```{r}
+# Updating the set of tuning parameters for CONFIRMED
+# With the commented lines, we get the current best parameter, and we make a grid
+# around them
+
+# workflow_results_confirmed %>% 
+#   pull_workflow_set_result("linear_reg_confirmed_ridge_wf") %>% 
+#   select_best(metric = "rmse") 
+ridge_param <- ridge_model %>%
+  parameters() %>%
+  update(penalty = penalty(c(1.538034e-10-1e-10, 1.538034e-10+1e-10)))
+
+# workflow_results_confirmed %>% 
+#   pull_workflow_set_result("linear_reg_confirmed_lasso_wf") %>% 
+#   select_best(metric = "rmse")
+lasso_param <- lasso_model %>%
+  parameters() %>%
+  update(penalty = penalty(c(1.538034e-10-1e-10, 1.538034e-10+1e-10)))
+
+# workflow_results_confirmed %>% 
+#  pull_workflow_set_result("linear_reg_confirmed_elastic_net_wf") %>% 
+#  select_best(metric = "rmse")
+en_param <- elastic_net_model %>%
+  parameters() %>%
+  update(penalty = penalty(c(5.159664e-08-1e-8, 5.159664e-08+1e-8)),
+         mixture = mixture(c(0.05609091-0.01, 0.05609091+0.01)))
+
+# workflow_results_confirmed %>% 
+#  pull_workflow_set_result("pls_confirmed_model_wf") %>% 
+#  select_best(metric = "rmse")
+pls_param <- pls_model %>%
+  parameters() %>%
+  update(predictor_prop = predictor_prop(c(0.6095881-0.05, 0.6095881+0.05)),
+         num_comp = num_comp(c(2-1, 2+3)))
+  
+# After that, we add them to the workflow
+workflow_tune_confirmed <- workflow_tune_confirmed %>%
+  option_add(param_info = ridge_param, id = "linear_reg_confirmed_ridge_wf") %>%
+  option_add(param_info = lasso_param, id = "linear_reg_confirmed_lasso_wf") %>%
+  option_add(param_info = en_param, id = "linear_reg_confirmed_elastic_net_wf") %>%
+  option_add(param_info = pls_param, id = "pls_confirmed_model_wf")
+```
+
+```{r, eval=F}
+# And we tune again our models:
+# DEATHS
+cl <- makePSOCKcluster(8)
+registerDoParallel(cl)
+
+grid_ctrl <-
+   control_grid(
+      save_pred = TRUE,
+      save_workflow = TRUE
+   )
+
+workflow_results_deaths_tuned <- workflow_tune_deaths %>%
+  workflow_map(
+    seed = 1503,
+    resamples = spain_rolling_deaths,
+    grid = 25,
+    control = grid_ctrl,
+    verbose = T
+   )
+
+# i	No tuning parameters. `fit_resamples()` will be attempted
+# i 1 of 5 resampling: linear_reg_deaths_lm_wf
+# v 1 of 5 resampling: linear_reg_deaths_lm_wf (9.9s)
+# i 2 of 5 tuning:     linear_reg_deaths_ridge_wf
+# v 2 of 5 tuning:     linear_reg_deaths_ridge_wf (2.7s)
+# i 3 of 5 tuning:     linear_reg_deaths_lasso_wf
+# v 3 of 5 tuning:     linear_reg_deaths_lasso_wf (2.6s)
+# i 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf
+# v 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf (36.6s)
+# i 5 of 5 tuning:     pls_deaths_model_wf
+# v 5 of 5 tuning:     pls_deaths_model_wf (37.9s)
+
+
+stopCluster(cl)
+
+# saveRDS(workflow_results_deaths_tuned, "workflow_results_deaths_tuned.RDS")
+
+# CONFIRMED
+cl <- makePSOCKcluster(8)
+registerDoParallel(cl)
+
+grid_ctrl <-
+   control_grid(
+      save_pred = TRUE,
+      save_workflow = TRUE
+   )
+
+workflow_results_confirmed_tuned <- workflow_tune_confirmed %>%
+  workflow_map(
+    seed = 1503,
+    resamples = spain_rolling_confirmed,
+    grid = 25,
+    control = grid_ctrl,
+    verbose = T
+   )
+
+# i	No tuning parameters. `fit_resamples()` will be attempted
+# i 1 of 5 resampling: linear_reg_confirmed_lm_wf
+# v 1 of 5 resampling: linear_reg_confirmed_lm_wf (9.3s)
+# i 2 of 5 tuning:     linear_reg_confirmed_ridge_wf
+# v 2 of 5 tuning:     linear_reg_confirmed_ridge_wf (2.6s)
+# i 3 of 5 tuning:     linear_reg_confirmed_lasso_wf
+# v 3 of 5 tuning:     linear_reg_confirmed_lasso_wf (2.4s)
+# i 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf
+# v 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf (34.2s)
+# i 5 of 5 tuning:     pls_confirmed_model_wf
+# v 5 of 5 tuning:     pls_confirmed_model_wf (39.7s)
+
+stopCluster(cl)
+
+# saveRDS(workflow_results_confirmed_tuned, "workflow_results_confirmed_tuned.RDS")
+```
+
+```{r}
+workflow_results_deaths <- readRDS("workflow_results_deaths.RDS")
+workflow_results_deaths_tuned <- readRDS("workflow_results_deaths_tuned.RDS")
+workflow_results_confirmed <- readRDS("workflow_results_confirmed.RDS")
+workflow_results_confirmed_tuned <- readRDS("workflow_results_confirmed_tuned.RDS")
+```
+
+```{r}
+# workflow_results_deaths %>%
+#   rank_results(select_best = T) %>%
+#   filter(.metric == "rmse")
+# workflow_results_deaths_tuned %>%
+#   rank_results(select_best = T) %>%
+#   filter(.metric == "rmse")
+# 
+# workflow_results_confirmed %>%
+#   rank_results(select_best = T) %>%
+#   filter(.metric == "rmse")
+# workflow_results_confirmed_tuned %>%
+#   rank_results(select_best = T) %>%
+#   filter(.metric == "rmse")
+
+autoplot(workflow_results_deaths_tuned, select_best = T) +
+  ggtitle("Results for the deaths model") +
+  theme(plot.title = element_text(hjust = 0.5, size = 20)) +
   scale_color_tq() +
   theme_tq()
 ```
 
-# Puebas 
-
-```{r}
-ridge_param <- ridge_model %>%
-  parameters() %>%
-  update(penalty = penalty(c(1.538034e-10-1e-5, 1.538034e-10+1e-5)))
-  
-workflow_tune_compare <- workflow_tune_compare %>%
-  option_add(param_info = ridge_param, id = "linear_reg_deaths_ridge_wf")
-
-workflow_tune_compare$option 
-
-linear_reg_ridge_wf <- 
-   workflow_results %>% 
-   pull_workflow("linear_reg_ridge_wf") %>% 
-   finalize_workflow(linear_reg_ridge_res)
-```
-
-
-```{r, eval=F}
-cl <- makePSOCKcluster(8)
-registerDoParallel(cl)
-
-grid_ctrl <-
-   control_grid(
-      save_pred = TRUE,
-      save_workflow = TRUE
-   )
-
-workflow_results <- workflow_tune_compare %>%
-  workflow_map(
-    seed = 1503,
-    resamples = spain_rolling_deaths,
-    grid = 25,
-    control = grid_ctrl,
-    verbose = T
-   )
-
-# i	No tuning parameters. `fit_resamples()` will be attempted
-# i 1 of 5 resampling: linear_reg_lm
-# v 1 of 5 resampling: linear_reg_lm (10.7s)
-# i 2 of 5 tuning:     linear_reg_ridge
-# v 2 of 5 tuning:     linear_reg_ridge (3.3s)
-# i 3 of 5 tuning:     linear_reg_lasso
-# v 3 of 5 tuning:     linear_reg_lasso (2.8s)
-# i 4 of 5 tuning:     linear_reg_elastic_net
-# v 4 of 5 tuning:     linear_reg_elastic_net (57.6s)
-# i 5 of 5 tuning:     pls_pls
-# v 5 of 5 tuning:     pls_pls (59s)
-
-stopCluster(cl)
-
-# saveRDS(workflow_results, "workflow_results.RDS")
-```
-
-```{r}
-linear_reg_ridge_res <- 
-   workflow_results %>% 
-   pull_workflow_set_result("linear_reg_deaths_ridge_wf") %>% 
-   select_best(metric = "rmse") 
-
-linear_reg_ridge_wf <- 
-   workflow_results %>% 
-   pull_workflow("linear_reg_ridge_wf") %>% 
-   finalize_workflow(linear_reg_ridge_res)
-
-linear_reg_ridge_fit <- linear_reg_ridge_wf %>%
-  fit(spain)
-
-linear_reg_ridge_fit %>%
-  pull_workflow_fit()
-
-plot(linear_reg_ridge_fit$fit$fit$fit)
-```
-
-################3
-
-
-```{r}
-best_results <- 
-   workflow_results %>% 
-   pull_workflow_set_result("pls_model_wf") %>% 
-   select_best(metric = "rmse")
-best_results
-
-
-best_workflow <- 
-   workflow_results %>% 
-   pull_workflow("pls_model_wf") %>% 
-   finalize_workflow(best_results)
-```
-
-
-```{r, results='hide'}
-# Fit the model
-best_fit <- best_workflow %>%
-  fit(data = spain)
-
-best_fit$fit$fit$fit$names
-best_fit %>%
-  pull_workflow_fit()
-plotVar(best_fit$fit$fit$fit)
-
-# Predictions in the training and testing sets
-pred_train <- best_fit %>%
-  predict(new_data = spain)
-
-pred_test <- best_fit %>%
-  predict(new_data = spain_new_data)
-
-spain %>%
-  mutate(predictions = pred_train$.pred) %>%
-  select(date, deaths_week, predictions) %>%
-  pivot_longer(cols = c("deaths_week", "predictions"), values_to = "value")
-
-pred_new_data <- spain_new_data %>%
-  mutate(predictions = pred_test$.pred) %>%
-  select(date, deaths_week, predictions) 
-  
-spain %>%
-  mutate(predictions = pred_train$.pred) %>%
-  select(date, deaths_week, predictions) %>%
-  pivot_longer(cols = c("deaths_week", "predictions"), values_to = "value") %>%
-  ggplot(aes(x = date, y = value)) +
-  geom_line(aes(color = name), size = 1) +
-  scale_color_manual(values = c("darkred", "steelblue")) +
-  labs(
-    y = "Deaths per week",
-    x = "Date"
-  ) 
+```{r, fig.cap="Results for both models"}
+autoplot(workflow_results_confirmed_tuned, select_best = T) +
+  scale_color_tq() +
+  ggtitle("Results for the confirmed cases model") +
+  theme(plot.title = element_text(hjust = 0.5, size = 20)) +
+  theme_tq()
 ```
 
 # MODEL SELECTION AND CONCLUSIONS 
 
 
+```{r}
+# Deaths
+best_results_deaths <- 
+   workflow_results_deaths_tuned %>% 
+   pull_workflow_set_result("pls_deaths_model_wf") %>% 
+   select_best(metric = "rmse")
+
+
+best_workflow_deaths <- 
+   workflow_results_deaths_tuned %>% 
+   pull_workflow("pls_deaths_model_wf") %>% 
+   finalize_workflow(best_results_deaths)
+
+# Confirmed
+best_results_confirmed <- 
+   workflow_results_confirmed_tuned %>% 
+   pull_workflow_set_result("pls_confirmed_model_wf") %>% 
+   select_best(metric = "rmse")
+
+
+best_workflow_confirmed <- 
+   workflow_results_confirmed_tuned %>% 
+   pull_workflow("pls_confirmed_model_wf") %>% 
+   finalize_workflow(best_results_confirmed)
+```
+
+```{r, results='hide'}
+best_fit_deaths <- best_workflow_deaths %>%
+  fit(spain)
+
+best_fit_confirmed <- best_workflow_confirmed %>%
+  fit(spain)
+```
+
+
+```{r}
+pred_train_deaths <- best_fit_deaths %>%
+  predict(new_data = spain)
+
+p1 <- spain %>%
+  mutate(predictions = pred_train_deaths$.pred) %>%
+  select(date, deaths_week, predictions) %>%
+  pivot_longer(cols = c("deaths_week", "predictions"), values_to = "value", names_to = "Variable") %>%
+  ggplot(aes(x = date, y = value)) +
+  geom_line(aes(color = Variable), size = 1) +
+  scale_color_manual(values = c("darkred", "steelblue")) +
+  labs(
+    y = "Deaths per week",
+    x = "Date"
+  ) 
+
+pred_train_confirmed <- best_fit_confirmed %>%
+  predict(new_data = spain)
+
+p2 <- spain %>%
+  mutate(predictions = pred_train_confirmed$.pred) %>%
+  select(date, confirmed_week, predictions) %>%
+  pivot_longer(cols = c("confirmed_week", "predictions"), values_to = "value", names_to = "Variable") %>%
+  ggplot(aes(x = date, y = value)) +
+  geom_line(aes(color = Variable), size = 1) +
+  scale_color_manual(values = c("darkred", "steelblue")) +
+  labs(
+    y = "Confirmed cases per week",
+    x = "Date"
+  ) 
+
+p1+p2
+```
+
+```{r}
+pred_test_deaths <- best_fit_deaths %>%
+  predict(new_data = spain_new_data)
+
+pred_test_confirmed <- best_fit_confirmed %>%
+  predict(new_data = spain_new_data)
+
+spain_new_data %>%
+  mutate(
+    predicted_deaths = pred_test_deaths$.pred,
+    predicted_confirmed = pred_test_confirmed$.pred
+  ) %>%
+  select(date, deaths_week, predicted_deaths, confirmed_week, predicted_confirmed) %>%
+  summarise(
+    date = date,
+    deaths_week = deaths_week, 
+    predicted_deaths = predicted_deaths,
+    difference_deaths = abs(deaths_week - predicted_deaths),
+    confirmed_week = confirmed_week, 
+    predicted_confirmed = predicted_confirmed,
+    difference_confirmed = abs(confirmed_week - predicted_confirmed)
+  )
+```
+
+\newpage
 # REFERENCES
