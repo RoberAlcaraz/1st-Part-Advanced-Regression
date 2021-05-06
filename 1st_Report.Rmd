@@ -37,7 +37,7 @@ pacman::p_load(ranger, mixOmics, plsmod)
 pacman::p_load(COVID19, tidyverse, tidymodels, rsample, recipes, parsnip, 
                yardstick, workflows, tune, patchwork, lubridate, recipeselectors,
                doParallel, tidyquant, finetune, ggpubr)
-library(tidyverse)
+library(tidyverse, attach.required = T)
 # For ggplot
 theme_set(theme_tq())
 
@@ -752,22 +752,22 @@ workflow_results_deaths <- workflow_tune_deaths %>%
   workflow_map(
     seed = 1503,
     resamples = spain_rolling_deaths,
-    grid = 25,
+    grid = 50,
     control = grid_ctrl,
     verbose = T
    )
 
 # i	No tuning parameters. `fit_resamples()` will be attempted
 # i 1 of 5 resampling: linear_reg_deaths_lm_wf
-# v 1 of 5 resampling: linear_reg_deaths_lm_wf (10.1s)
+# v 1 of 5 resampling: linear_reg_deaths_lm_wf (10.4s)
 # i 2 of 5 tuning:     linear_reg_deaths_ridge_wf
-# v 2 of 5 tuning:     linear_reg_deaths_ridge_wf (3.3s)
+# v 2 of 5 tuning:     linear_reg_deaths_ridge_wf (2.8s)
 # i 3 of 5 tuning:     linear_reg_deaths_lasso_wf
-# v 3 of 5 tuning:     linear_reg_deaths_lasso_wf (2.9s)
+# v 3 of 5 tuning:     linear_reg_deaths_lasso_wf (2.8s)
 # i 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf
-# v 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf (41.6s)
+# v 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf (1m 12.3s)
 # i 5 of 5 tuning:     pls_deaths_model_wf
-# v 5 of 5 tuning:     pls_deaths_model_wf (46.7s)
+# v 5 of 5 tuning:     pls_deaths_model_wf (1m 18.9s)
 
 stopCluster(cl)
 
@@ -787,22 +787,22 @@ workflow_results_confirmed <- workflow_tune_confirmed %>%
   workflow_map(
     seed = 1503,
     resamples = spain_rolling_confirmed,
-    grid = 25,
+    grid = 50,
     control = grid_ctrl,
     verbose = T
    )
 
 # i	No tuning parameters. `fit_resamples()` will be attempted
 # i 1 of 5 resampling: linear_reg_confirmed_lm_wf
-# v 1 of 5 resampling: linear_reg_confirmed_lm_wf (12.1s)
+# v 1 of 5 resampling: linear_reg_confirmed_lm_wf (9.3s)
 # i 2 of 5 tuning:     linear_reg_confirmed_ridge_wf
-# v 2 of 5 tuning:     linear_reg_confirmed_ridge_wf (3.6s)
+# v 2 of 5 tuning:     linear_reg_confirmed_ridge_wf (2.8s)
 # i 3 of 5 tuning:     linear_reg_confirmed_lasso_wf
-# v 3 of 5 tuning:     linear_reg_confirmed_lasso_wf (3.1s)
+# v 3 of 5 tuning:     linear_reg_confirmed_lasso_wf (2.3s)
 # i 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf
-# v 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf (43.2s)
+# v 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf (1m 3.2s)
 # i 5 of 5 tuning:     pls_confirmed_model_wf
-# v 5 of 5 tuning:     pls_confirmed_model_wf (46.5s)
+# v 5 of 5 tuning:     pls_confirmed_model_wf (1m 8.6s)
 
 stopCluster(cl)
 
@@ -912,7 +912,7 @@ workflow_results_deaths_tuned <- workflow_tune_deaths %>%
   workflow_map(
     seed = 1503,
     resamples = spain_rolling_deaths,
-    grid = 25,
+    grid = 50,
     control = grid_ctrl,
     verbose = T
    )
@@ -948,7 +948,7 @@ workflow_results_confirmed_tuned <- workflow_tune_confirmed %>%
   workflow_map(
     seed = 1503,
     resamples = spain_rolling_confirmed,
-    grid = 25,
+    grid = 50,
     control = grid_ctrl,
     verbose = T
    )
