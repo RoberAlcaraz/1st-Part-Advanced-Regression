@@ -667,6 +667,12 @@ each PLS component, and `num_comp`, which is the number of PLS components.
 lm_model <- 
   linear_reg() %>%
   set_engine("lm")
+
+###################
+source("rlm.R")
+rlm_model <- 
+  r_linear_reg() %>%
+  set_engine("rlm")
   
 ridge_model <- 
   linear_reg(penalty = tune(), mixture = 0) %>%
@@ -701,6 +707,7 @@ workflow_tune_deaths <- workflow_set(
   ),
   models = list(
     lm_wf            = lm_model,
+    rlm_wf           = rlm_model,
     ridge_wf         = ridge_model,
     lasso_wf         = lasso_model,
     elastic_net_wf   = elastic_net_model,
@@ -710,7 +717,12 @@ workflow_tune_deaths <- workflow_set(
 )
 
 workflow_tune_deaths <- workflow_tune_deaths %>%
-  filter(wflow_id == c("linear_reg_deaths_lm_wf", "linear_reg_deaths_ridge_wf", "linear_reg_deaths_lasso_wf", "linear_reg_deaths_elastic_net_wf", "pls_deaths_model_wf"))
+  filter(wflow_id == c("linear_reg_deaths_lm_wf", "linear_reg_deaths_rlm_wf", "linear_reg_deaths_ridge_wf", "linear_reg_deaths_lasso_wf", "linear_reg_deaths_elastic_net_wf", "pls_deaths_model_wf"))
+
+workflow_results_deaths %>% 
+  pull_workflow(id = "linear_reg_deaths_rlm_wf")
+workflow_results_deaths %>% 
+  pull_workflow(id = "linear_reg_deaths_lm_wf")
 
 # Confirmed
 workflow_tune_confirmed <- workflow_set(

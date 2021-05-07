@@ -97,13 +97,26 @@ show_model_info("r_linear_reg")
 data("iris")
 str(iris)
 
+iris_folds <- vfold_cv(iris)
+
 rlm_spec <- r_linear_reg() %>%
   set_engine("rlm")
 
-rlm_fit <- rlm_spec %>% 
-  fit(Sepal.Length ~ ., data = iris)
+rlm_rec <-
+  recipe(Sepal.Length ~ ., data = iris)
 
-predict(rlm_fit, new_data = iris, type = "numeric") %>%
-  bind_cols(iris %>% select(Sepal.Length)) %>%
+rlm_wf <- 
+  workflow() %>%
+  add_model(rlm_spec) %>%
+  add_recipe(rlm_rec)
+
+rlm_fit <- rlm_wf %>% 
+  fit_resamples(
+    iris_folds,
+    control = control_resamples(save_pred = T)
+    )
+
+rlm_fit %>% collect_predictions() %>%
+  arrange(.row) %>%
+  dplyr::select(.pred, Sepal.Length) %>%
   cor()
-
