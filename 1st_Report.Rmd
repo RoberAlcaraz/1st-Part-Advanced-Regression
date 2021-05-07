@@ -109,13 +109,13 @@ skimr::skim(spain)
 ```{r}
 population <- spain$population[1]
 spain <- spain %>%
-  select(date, deaths, confirmed, vaccines, hosp, icu, stay_home_restrictions,
+  dplyr::select(date, deaths, confirmed, vaccines, hosp, icu, stay_home_restrictions,
          school_closing, workplace_closing, transport_closing, gatherings_restrictions,
          internal_movement_restrictions)
 spain <- spain[, -1]
 
 spain_new_data <- spain_new_data %>%
-  select(date, deaths, confirmed, vaccines, hosp, icu, stay_home_restrictions,
+  dplyr::select(date, deaths, confirmed, vaccines, hosp, icu, stay_home_restrictions,
          school_closing, workplace_closing, transport_closing, gatherings_restrictions,
          internal_movement_restrictions)
 spain_new_data <- spain_new_data[, -1]
@@ -210,7 +210,7 @@ spain <- spain %>%
                                             levels = c(0, 1, 2),
                                             labels = c("no", "recommended", "mandatory")),
   ) %>%
-  select(-stay_home_restrictions)
+  dplyr::select(-stay_home_restrictions)
 
 spain_new_data <- spain_new_data %>%
   mutate(
@@ -238,7 +238,7 @@ spain_new_data <- spain_new_data %>%
                                             levels = c(0, 1, 2),
                                             labels = c("no", "recommended", "mandatory")),
   ) %>%
-  select(-stay_home_restrictions)
+  dplyr::select(-stay_home_restrictions)
 ```
 
 After these changes, in the next section we will perform some visualizations to 
@@ -322,7 +322,7 @@ for (i in 1:nrow(spain)-1){
 }
 
 spain <- spain %>%
-  select(-hosp, -icu)
+  dplyr::select(-hosp, -icu)
 
 spain_new_data$vaccines[1] <- 10784997 # we take the data from the previous day
 for (i in 1:nrow(spain_new_data)-1){
@@ -330,7 +330,7 @@ for (i in 1:nrow(spain_new_data)-1){
 }
 
 spain_new_data <- spain_new_data %>%
-  select(-hosp, -icu)
+  dplyr::select(-hosp, -icu)
 ```
 
 Then, we are going to see the relationships between our target variables, deaths
@@ -452,7 +452,7 @@ spain <- spain %>%
   ) %>%
   ungroup() %>%
   filter(date %in% new_date) %>%
-  select(-new_date)
+  dplyr::select(-new_date)
 
 
 spain_new_data <- spain_new_data %>%
@@ -477,7 +477,7 @@ spain_new_data <- spain_new_data %>%
   ) %>%
   ungroup() %>%
   filter(date %in% new_date) %>%
-  select(-new_date)
+  dplyr::select(-new_date)
 ```
 
 Now that we have prepared our data, we have to think about what **preprocessing**
@@ -669,10 +669,10 @@ lm_model <-
   set_engine("lm")
 
 ###################
-source("rlm.R")
-rlm_model <- 
-  r_linear_reg() %>%
-  set_engine("rlm")
+# source("rlm.R")
+# rlm_model <- 
+#   r_linear_reg() %>%
+#   set_engine("rlm")
   
 ridge_model <- 
   linear_reg(penalty = tune(), mixture = 0) %>%
@@ -717,7 +717,7 @@ workflow_tune_deaths <- workflow_set(
 )
 
 workflow_tune_deaths <- workflow_tune_deaths %>%
-  filter(wflow_id == c("linear_reg_deaths_lm_wf", "linear_reg_deaths_rlm_wf", "linear_reg_deaths_ridge_wf", "linear_reg_deaths_lasso_wf", "linear_reg_deaths_elastic_net_wf", "pls_deaths_model_wf"))
+  filter(wflow_id == c("linear_reg_deaths_lm_wf", "linear_reg_deaths_ridge_wf", "linear_reg_deaths_lasso_wf", "linear_reg_deaths_elastic_net_wf", "pls_deaths_model_wf"))
 
 workflow_results_deaths %>% 
   pull_workflow(id = "linear_reg_deaths_rlm_wf")
@@ -1090,7 +1090,7 @@ pred_train_deaths <- best_fit_deaths %>%
 
 p1 <- spain %>%
   mutate(predictions = pred_train_deaths$.pred) %>%
-  select(date, deaths_week, predictions) %>%
+  dplyr::select(date, deaths_week, predictions) %>%
   pivot_longer(cols = c("deaths_week", "predictions"), values_to = "value", names_to = "Variable") %>%
   ggplot(aes(x = date, y = value)) +
   geom_line(aes(color = Variable), size = 1) +
@@ -1105,7 +1105,7 @@ pred_train_confirmed <- best_fit_confirmed %>%
 
 p2 <- spain %>%
   mutate(predictions = pred_train_confirmed$.pred) %>%
-  select(date, confirmed_week, predictions) %>%
+  dplyr::select(date, confirmed_week, predictions) %>%
   pivot_longer(cols = c("confirmed_week", "predictions"), values_to = "value", names_to = "Variable") %>%
   ggplot(aes(x = date, y = value)) +
   geom_line(aes(color = Variable), size = 1) +
@@ -1132,7 +1132,7 @@ spain_new_data %>%
     predicted_deaths = pred_test_deaths$.pred,
     predicted_confirmed = pred_test_confirmed$.pred
   ) %>%
-  select(date, deaths_week, predicted_deaths, confirmed_week, predicted_confirmed) %>%
+  dplyr::select(date, deaths_week, predicted_deaths, confirmed_week, predicted_confirmed) %>%
   summarise(
     date = date,
     deaths_week = deaths_week, 
