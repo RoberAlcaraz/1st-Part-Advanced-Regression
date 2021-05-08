@@ -42,10 +42,10 @@ library(tidyverse, attach.required = T)
 theme_set(theme_tq())
 
 # spain <- covid19(country = "spain", start = "2020-01-22", end = "2021-04-11")
-# spain_new_data <- covid19(country = "spain", start = "2021-04-11", end = "2021-04-25")
+# spain_new_data <- covid19(country = "spain", start = "2021-04-11", end = "2021-05-02")
 
-# saveRDS(spain, "data/spain.RDS")
-# saveRDS(spain_new_data, "data/spain_new_data.RDS")
+# saveRDS(spain, "00_data/spain.RDS")
+# saveRDS(spain_new_data, "00_data/spain_new_data.RDS")
 ```
 
 ```{r include=FALSE}
@@ -519,8 +519,8 @@ spain <- spain %>%
 
 spain_new_data <- spain_new_data %>%
   mutate(
-    lag_3_deaths_week = tail(spain$deaths_week, 3)[1:2],
-    lag_3_confirmed_week = tail(spain$confirmed_week, 3)[1:2]
+    lag_3_deaths_week = tail(spain$deaths_week, 3),
+    lag_3_confirmed_week = tail(spain$confirmed_week, 3)
   )
 ```
 
@@ -609,15 +609,16 @@ basic_rec_deaths <-
 
 linear_reg_rec_deaths <- 
   basic_rec_deaths %>%
-  step_nzv(all_numeric_predictors(), freq_cut = 85/5) %>% # remove the zero variance variables
-  step_corr(all_numeric_predictors(), threshold = 0.65) %>% # decorrelate predictors
-  step_dummy(all_nominal_predictors()) # get dummy variables
+  step_dummy(all_nominal_predictors()) %>% # get dummy variables
+  step_nzv(all_numeric_predictors(), freq_cut = 65/5) %>% # remove the zero variance variables
+  step_corr(all_numeric_predictors(), threshold = 0.65) # decorrelate predictors
+  
   
 pls_rec_deaths <- 
   basic_rec_deaths %>%
-  step_nzv(all_numeric_predictors(), freq_cut = 85/5) %>% # remove the zero variance variables 
-  step_normalize(all_numeric_predictors()) %>% # center and scale
-  step_dummy(all_nominal_predictors()) # get dummy variables
+  step_dummy(all_nominal_predictors()) %>% # get dummy variables
+  step_nzv(all_numeric_predictors(), freq_cut = 65/5) %>% # remove the zero variance variables 
+  step_normalize(all_numeric_predictors()) # center and scale
 
 
 # Recipes for the confirmed model
@@ -627,15 +628,16 @@ basic_rec_confirmed <-
 
 linear_reg_rec_confirmed <- 
   basic_rec_confirmed %>%
-  step_nzv(all_numeric_predictors(), freq_cut = 85/5) %>% # remove the zero variance variables
-  step_corr(all_numeric_predictors(), threshold = 0.65) %>% # decorrelate predictors
-  step_dummy(all_nominal_predictors()) # get dummy variables
+  step_dummy(all_nominal_predictors()) %>% # get dummy variables
+  step_nzv(all_numeric_predictors(), freq_cut = 65/5) %>% # remove the zero variance variables
+  step_corr(all_numeric_predictors(), threshold = 0.65) # decorrelate predictors
+  
   
 pls_rec_confirmed <- 
   basic_rec_confirmed %>%
-  step_nzv(all_numeric_predictors(), freq_cut = 85/5) %>% # remove the zero variance variables 
-  step_normalize(all_numeric_predictors()) %>% # center and scale
-  step_dummy(all_nominal_predictors()) # get dummy variables
+  step_dummy(all_nominal_predictors()) %>% # get dummy variables
+  step_nzv(all_numeric_predictors(), freq_cut = 65/5) %>% # remove the zero variance variables 
+  step_normalize(all_numeric_predictors()) # center and scale
 ```
 
 \bigskip
@@ -707,7 +709,6 @@ set_pred(
       )
   )
 )
-
 ```
 
 
@@ -744,6 +745,37 @@ pls_model <-
   set_engine('mixOmics') %>%
   set_mode('regression')
 ```
+
+```{r}
+# Deaths
+rlm_deaths_wf <- 
+  workflow() %>%
+  add_recipe(linear_reg_rec_deaths) %>%
+  add_model(rlm_model)
+
+rlm_deaths_resamples <-
+  rlm_deaths_wf %>%
+  fit_resamples(
+    spain_rolling_deaths,
+    control = control_resamples(save_pred = T, 
+                                save_workflow = T)
+  )
+
+# Confirmed
+rlm_confirmed_wf <- 
+  workflow() %>%
+  add_recipe(linear_reg_rec_confirmed) %>%
+  add_model(rlm_model)
+
+rlm_confirmed_resamples <-
+  rlm_confirmed_wf %>%
+  fit_resamples(
+    spain_rolling_confirmed,
+    control = control_resamples(save_pred = T, 
+                                save_workflow = T)
+  )
+```
+
 
 \bigskip
 Thanks to the `workflowsets` package [@workflowsets], we can create two sets of **workflows** (pipelines in python), one for the deaths model and the other for the confirmed cases. A workflow is an object which is formed by a recipe and a model. 
