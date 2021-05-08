@@ -34,9 +34,9 @@ pacman::p_load(ranger, mixOmics, plsmod)
 
 # Packages
 # devtools::install_github("stevenpawley/recipeselectors")
-pacman::p_load(COVID19, tidyverse, tidymodels, rsample, recipes, parsnip, 
+pacman::p_load(COVID19, tidymodels, rsample, recipes, parsnip, 
                yardstick, workflows, tune, patchwork, lubridate, recipeselectors,
-               doParallel, tidyquant, finetune, ggpubr)
+               doParallel, tidyquant, finetune, ggpubr, MASS)
 library(tidyverse, attach.required = T)
 # For ggplot
 theme_set(theme_tq())
@@ -663,6 +663,56 @@ tune also the `mixture` parameter, then we get a elastic net model.
 each PLS component, and `num_comp`, which is the number of PLS components.
 
 ```{r}
+set_model_engine("linear_reg", "regression", eng = "rlm")
+set_dependency("linear_reg", eng = "rlm", pkg = "MASS")
+
+set_fit(
+  model = "linear_reg",
+  eng = "rlm",
+  mode = "regression",
+  value = list(
+    interface = "formula",
+    protect = c("formula", "data", "weights"),
+    func = c(pkg = "MASS", fun = "rlm"),
+    defaults = list()
+  )
+)
+
+set_encoding(
+  model = "linear_reg",
+  eng = "rlm",
+  mode = "regression",
+  options = list(
+    predictor_indicators = "traditional",
+    compute_intercept = TRUE,
+    remove_intercept = TRUE,
+    allow_sparse_x = FALSE
+  )
+)
+
+set_pred(
+  model = "linear_reg",
+  eng = "rlm",
+  mode = "regression",
+  type = "numeric",
+  value = list(
+    pre = NULL,
+    post = NULL,
+    func = c(fun = "predict"),
+    args =
+      list(
+        object = expr(object$fit),
+        newdata = expr(new_data),
+        type = "response"
+      )
+  )
+)
+
+```
+
+
+
+```{r}
 # Models
 lm_model <- 
   linear_reg() %>%
@@ -670,9 +720,9 @@ lm_model <-
 
 ###################
 # source("rlm.R")
-# rlm_model <- 
-#   r_linear_reg() %>%
-#   set_engine("rlm")
+rlm_model <- 
+  linear_reg() %>%
+  set_engine("rlm")
   
 ridge_model <- 
   linear_reg(penalty = tune(), mixture = 0) %>%
@@ -707,7 +757,6 @@ workflow_tune_deaths <- workflow_set(
   ),
   models = list(
     lm_wf            = lm_model,
-    rlm_wf           = rlm_model,
     ridge_wf         = ridge_model,
     lasso_wf         = lasso_model,
     elastic_net_wf   = elastic_net_model,
@@ -719,9 +768,7 @@ workflow_tune_deaths <- workflow_set(
 workflow_tune_deaths <- workflow_tune_deaths %>%
   filter(wflow_id == c("linear_reg_deaths_lm_wf", "linear_reg_deaths_ridge_wf", "linear_reg_deaths_lasso_wf", "linear_reg_deaths_elastic_net_wf", "pls_deaths_model_wf"))
 
-workflow_results_deaths %>% 
-  pull_workflow(id = "linear_reg_deaths_rlm_wf")
-workflow_results_deaths %>% 
+workflow_tune_deaths %>% 
   pull_workflow(id = "linear_reg_deaths_lm_wf")
 
 # Confirmed
@@ -832,30 +879,30 @@ stopCluster(cl)
 #   select_best(metric = "rmse") 
 ridge_param <- ridge_model %>%
   parameters() %>%
-  update(penalty = penalty(c(1.538034e-10-1e-10, 1.538034e-10+1e-10)))
+  update(penalty = penalty(c(1.293592e-10-1e-10, 1.293592e-10+1e-10)))
 
 # workflow_results_deaths %>% 
 #   pull_workflow_set_result("linear_reg_deaths_lasso_wf") %>% 
 #   select_best(metric = "rmse")
 lasso_param <- lasso_model %>%
   parameters() %>%
-  update(penalty = penalty(c(1.538034e-10-1e-10, 1.538034e-10+1e-10)))
+  update(penalty = penalty(c(1.293592e-10-1e-10, 1.293592e-10+1e-10)))
 
 # workflow_results_deaths %>% 
-#   pull_workflow_set_result("linear_reg_deaths_elastic_net_wf") %>% 
+#   pull_workflow_set_result("linear_reg_deaths_elastic_net_wf") %>%
 #   select_best(metric = "rmse")
 en_param <- elastic_net_model %>%
   parameters() %>%
-  update(penalty = penalty(c(2.652128e-05-1e-5, 2.652128e-05+1e-5)),
-         mixture = mixture(c(0.9843659-0.01, 0.9843659+0.01)))
+  update(penalty = penalty(c(2.050205e-08-1e-8, 2.050205e-08+1e-8)),
+         mixture = mixture(c(0.991625-0.005, 0.991625+0.005)))
 
 # workflow_results_deaths %>% 
-#   pull_workflow_set_result("pls_deaths_model_wf") %>% 
-#   select_best(metric = "rmse")
+#  pull_workflow_set_result("pls_deaths_model_wf") %>% 
+#  select_best(metric = "rmse")
 pls_param <- pls_model %>%
   parameters() %>%
-  update(predictor_prop = predictor_prop(c(0.1088969-0.05, 0.1088969+0.05)),
-         num_comp = num_comp(c(3-2, 3+2)))
+  update(predictor_prop = predictor_prop(c(0.09556132-0.05, 0.09556132+0.05)),
+         num_comp = num_comp(c(2-1, 2+3)))
   
 # After that, we add them to the workflow
 workflow_tune_deaths <- workflow_tune_deaths %>%
@@ -929,19 +976,6 @@ workflow_results_deaths_tuned <- workflow_tune_deaths %>%
     verbose = T
    )
 
-# i	No tuning parameters. `fit_resamples()` will be attempted
-# i 1 of 5 resampling: linear_reg_deaths_lm_wf
-# v 1 of 5 resampling: linear_reg_deaths_lm_wf (9.9s)
-# i 2 of 5 tuning:     linear_reg_deaths_ridge_wf
-# v 2 of 5 tuning:     linear_reg_deaths_ridge_wf (2.7s)
-# i 3 of 5 tuning:     linear_reg_deaths_lasso_wf
-# v 3 of 5 tuning:     linear_reg_deaths_lasso_wf (2.6s)
-# i 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf
-# v 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf (36.6s)
-# i 5 of 5 tuning:     pls_deaths_model_wf
-# v 5 of 5 tuning:     pls_deaths_model_wf (37.9s)
-
-
 stopCluster(cl)
 
 # saveRDS(workflow_results_deaths_tuned, "workflow_results_deaths_tuned.RDS")
@@ -964,18 +998,6 @@ workflow_results_confirmed_tuned <- workflow_tune_confirmed %>%
     control = grid_ctrl,
     verbose = T
    )
-
-# i	No tuning parameters. `fit_resamples()` will be attempted
-# i 1 of 5 resampling: linear_reg_confirmed_lm_wf
-# v 1 of 5 resampling: linear_reg_confirmed_lm_wf (9.3s)
-# i 2 of 5 tuning:     linear_reg_confirmed_ridge_wf
-# v 2 of 5 tuning:     linear_reg_confirmed_ridge_wf (2.6s)
-# i 3 of 5 tuning:     linear_reg_confirmed_lasso_wf
-# v 3 of 5 tuning:     linear_reg_confirmed_lasso_wf (2.4s)
-# i 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf
-# v 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf (34.2s)
-# i 5 of 5 tuning:     pls_confirmed_model_wf
-# v 5 of 5 tuning:     pls_confirmed_model_wf (39.7s)
 
 stopCluster(cl)
 
