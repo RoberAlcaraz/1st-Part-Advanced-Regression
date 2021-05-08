@@ -17,7 +17,7 @@ pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes, emo)
 # spain <- COVID19::covid19(country = "spain")
 # saveRDS(spain, "spain.RDS")
 
-spain <- readRDS("spain.RDS")
+spain <- readRDS("../00_data/spain.RDS")
 
 server <- function(input, output){
   
