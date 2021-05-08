@@ -609,16 +609,18 @@ basic_rec_deaths <-
 
 linear_reg_rec_deaths <- 
   basic_rec_deaths %>%
-  step_dummy(all_nominal_predictors()) %>% # get dummy variables
   step_nzv(all_numeric_predictors(), freq_cut = 65/5) %>% # remove the zero variance variables
-  step_corr(all_numeric_predictors(), threshold = 0.65) # decorrelate predictors
+  step_corr(all_numeric_predictors(), threshold = 0.65) %>% # decorrelate predictors
+  step_dummy(all_nominal_predictors())# get dummy variables
+
   
   
 pls_rec_deaths <- 
   basic_rec_deaths %>%
-  step_dummy(all_nominal_predictors()) %>% # get dummy variables
   step_nzv(all_numeric_predictors(), freq_cut = 65/5) %>% # remove the zero variance variables 
-  step_normalize(all_numeric_predictors()) # center and scale
+  step_normalize(all_numeric_predictors()) %>% # center and scale
+  step_dummy(all_nominal_predictors()) # get dummy variables
+
 
 
 # Recipes for the confirmed model
@@ -628,16 +630,17 @@ basic_rec_confirmed <-
 
 linear_reg_rec_confirmed <- 
   basic_rec_confirmed %>%
-  step_dummy(all_nominal_predictors()) %>% # get dummy variables
   step_nzv(all_numeric_predictors(), freq_cut = 65/5) %>% # remove the zero variance variables
-  step_corr(all_numeric_predictors(), threshold = 0.65) # decorrelate predictors
+  step_corr(all_numeric_predictors(), threshold = 0.65) %>% # decorrelate predictors
+  step_dummy(all_nominal_predictors()) # get dummy variables
+
   
   
 pls_rec_confirmed <- 
   basic_rec_confirmed %>%
-  step_dummy(all_nominal_predictors()) %>% # get dummy variables
   step_nzv(all_numeric_predictors(), freq_cut = 65/5) %>% # remove the zero variance variables 
-  step_normalize(all_numeric_predictors()) # center and scale
+  step_normalize(all_numeric_predictors()) %>% # center and scale
+  step_dummy(all_nominal_predictors()) # get dummy variables
 ```
 
 \bigskip
@@ -664,66 +667,12 @@ tune also the `mixture` parameter, then we get a elastic net model.
 `predictor_prop`, which is the proportion of predictors that are allowed to affect
 each PLS component, and `num_comp`, which is the number of PLS components.
 
-```{r}
-set_model_engine("linear_reg", "regression", eng = "rlm")
-set_dependency("linear_reg", eng = "rlm", pkg = "MASS")
-
-set_fit(
-  model = "linear_reg",
-  eng = "rlm",
-  mode = "regression",
-  value = list(
-    interface = "formula",
-    protect = c("formula", "data", "weights"),
-    func = c(pkg = "MASS", fun = "rlm"),
-    defaults = list()
-  )
-)
-
-set_encoding(
-  model = "linear_reg",
-  eng = "rlm",
-  mode = "regression",
-  options = list(
-    predictor_indicators = "traditional",
-    compute_intercept = TRUE,
-    remove_intercept = TRUE,
-    allow_sparse_x = FALSE
-  )
-)
-
-set_pred(
-  model = "linear_reg",
-  eng = "rlm",
-  mode = "regression",
-  type = "numeric",
-  value = list(
-    pre = NULL,
-    post = NULL,
-    func = c(fun = "predict"),
-    args =
-      list(
-        object = expr(object$fit),
-        newdata = expr(new_data),
-        type = "response"
-      )
-  )
-)
-```
-
-
 
 ```{r}
 # Models
 lm_model <- 
   linear_reg() %>%
   set_engine("lm")
-
-###################
-# source("rlm.R")
-rlm_model <- 
-  linear_reg() %>%
-  set_engine("rlm")
   
 ridge_model <- 
   linear_reg(penalty = tune(), mixture = 0) %>%
@@ -747,10 +696,27 @@ pls_model <-
 ```
 
 ```{r}
+# Now, we can start by defining the robust linear model.
+# There is some problems with doing parallel processing 
+# with new models. Therefore, we will fit it before.
+
+source("rlm.R")
+
+rlm_model <- 
+  linear_reg() %>%
+  set_engine("rlm")
+
+r_linear_reg_rec_deaths <- 
+  basic_rec_deaths %>%
+  step_dummy(all_nominal_predictors()) %>% # get dummy variables
+  step_nzv(all_numeric_predictors(), freq_cut = 65/5) %>% # remove the zero variance variables
+  step_corr(all_numeric_predictors(), threshold = 0.65) # decorrelate predictors
+  
+
 # Deaths
 rlm_deaths_wf <- 
   workflow() %>%
-  add_recipe(linear_reg_rec_deaths) %>%
+  add_recipe(r_linear_reg_rec_deaths) %>%
   add_model(rlm_model)
 
 rlm_deaths_resamples <-
@@ -764,7 +730,7 @@ rlm_deaths_resamples <-
 # Confirmed
 rlm_confirmed_wf <- 
   workflow() %>%
-  add_recipe(linear_reg_rec_confirmed) %>%
+  add_recipe(r_linear_reg_rec_confirmed) %>%
   add_model(rlm_model)
 
 rlm_confirmed_resamples <-
@@ -799,9 +765,6 @@ workflow_tune_deaths <- workflow_set(
 
 workflow_tune_deaths <- workflow_tune_deaths %>%
   filter(wflow_id == c("linear_reg_deaths_lm_wf", "linear_reg_deaths_ridge_wf", "linear_reg_deaths_lasso_wf", "linear_reg_deaths_elastic_net_wf", "pls_deaths_model_wf"))
-
-workflow_tune_deaths %>% 
-  pull_workflow(id = "linear_reg_deaths_lm_wf")
 
 # Confirmed
 workflow_tune_confirmed <- workflow_set(
@@ -852,13 +815,13 @@ workflow_results_deaths <- workflow_tune_deaths %>%
 # i 1 of 5 resampling: linear_reg_deaths_lm_wf
 # v 1 of 5 resampling: linear_reg_deaths_lm_wf (10.4s)
 # i 2 of 5 tuning:     linear_reg_deaths_ridge_wf
-# v 2 of 5 tuning:     linear_reg_deaths_ridge_wf (2.8s)
+# v 2 of 5 tuning:     linear_reg_deaths_ridge_wf (3.2s)
 # i 3 of 5 tuning:     linear_reg_deaths_lasso_wf
-# v 3 of 5 tuning:     linear_reg_deaths_lasso_wf (2.8s)
+# v 3 of 5 tuning:     linear_reg_deaths_lasso_wf (2.9s)
 # i 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf
-# v 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf (1m 12.3s)
+# v 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf (1m 11.1s)
 # i 5 of 5 tuning:     pls_deaths_model_wf
-# v 5 of 5 tuning:     pls_deaths_model_wf (1m 18.9s)
+# v 5 of 5 tuning:     pls_deaths_model_wf (1m 11.1s)
 
 stopCluster(cl)
 
@@ -885,15 +848,15 @@ workflow_results_confirmed <- workflow_tune_confirmed %>%
 
 # i	No tuning parameters. `fit_resamples()` will be attempted
 # i 1 of 5 resampling: linear_reg_confirmed_lm_wf
-# v 1 of 5 resampling: linear_reg_confirmed_lm_wf (9.3s)
+# v 1 of 5 resampling: linear_reg_confirmed_lm_wf (11.5s)
 # i 2 of 5 tuning:     linear_reg_confirmed_ridge_wf
-# v 2 of 5 tuning:     linear_reg_confirmed_ridge_wf (2.8s)
+# v 2 of 5 tuning:     linear_reg_confirmed_ridge_wf (3.2s)
 # i 3 of 5 tuning:     linear_reg_confirmed_lasso_wf
-# v 3 of 5 tuning:     linear_reg_confirmed_lasso_wf (2.3s)
+# v 3 of 5 tuning:     linear_reg_confirmed_lasso_wf (3s)
 # i 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf
-# v 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf (1m 3.2s)
+# v 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf (1m 18.2s)
 # i 5 of 5 tuning:     pls_confirmed_model_wf
-# v 5 of 5 tuning:     pls_confirmed_model_wf (1m 8.6s)
+# v 5 of 5 tuning:     pls_confirmed_model_wf (1m 29.2s)
 
 stopCluster(cl)
 
@@ -905,21 +868,18 @@ stopCluster(cl)
 # Updating the set of tuning parameters for DEATHS
 # With the commented lines, we get the current best parameter, and we make a grid
 # around them
-
 # workflow_results_deaths %>% 
 #   pull_workflow_set_result("linear_reg_deaths_ridge_wf") %>% 
 #   select_best(metric = "rmse") 
 ridge_param <- ridge_model %>%
   parameters() %>%
   update(penalty = penalty(c(1.293592e-10-1e-10, 1.293592e-10+1e-10)))
-
 # workflow_results_deaths %>% 
 #   pull_workflow_set_result("linear_reg_deaths_lasso_wf") %>% 
 #   select_best(metric = "rmse")
 lasso_param <- lasso_model %>%
   parameters() %>%
   update(penalty = penalty(c(1.293592e-10-1e-10, 1.293592e-10+1e-10)))
-
 # workflow_results_deaths %>% 
 #   pull_workflow_set_result("linear_reg_deaths_elastic_net_wf") %>%
 #   select_best(metric = "rmse")
@@ -927,7 +887,6 @@ en_param <- elastic_net_model %>%
   parameters() %>%
   update(penalty = penalty(c(2.050205e-08-1e-8, 2.050205e-08+1e-8)),
          mixture = mixture(c(0.991625-0.005, 0.991625+0.005)))
-
 # workflow_results_deaths %>% 
 #  pull_workflow_set_result("pls_deaths_model_wf") %>% 
 #  select_best(metric = "rmse")
@@ -945,49 +904,6 @@ workflow_tune_deaths <- workflow_tune_deaths %>%
 ```
 
 ```{r}
-# Updating the set of tuning parameters for CONFIRMED
-# With the commented lines, we get the current best parameter, and we make a grid
-# around them
-
-# workflow_results_confirmed %>% 
-#   pull_workflow_set_result("linear_reg_confirmed_ridge_wf") %>% 
-#   select_best(metric = "rmse") 
-ridge_param <- ridge_model %>%
-  parameters() %>%
-  update(penalty = penalty(c(1.538034e-10-1e-10, 1.538034e-10+1e-10)))
-
-# workflow_results_confirmed %>% 
-#   pull_workflow_set_result("linear_reg_confirmed_lasso_wf") %>% 
-#   select_best(metric = "rmse")
-lasso_param <- lasso_model %>%
-  parameters() %>%
-  update(penalty = penalty(c(1.538034e-10-1e-10, 1.538034e-10+1e-10)))
-
-# workflow_results_confirmed %>% 
-#  pull_workflow_set_result("linear_reg_confirmed_elastic_net_wf") %>% 
-#  select_best(metric = "rmse")
-en_param <- elastic_net_model %>%
-  parameters() %>%
-  update(penalty = penalty(c(5.159664e-08-1e-8, 5.159664e-08+1e-8)),
-         mixture = mixture(c(0.05609091-0.01, 0.05609091+0.01)))
-
-# workflow_results_confirmed %>% 
-#  pull_workflow_set_result("pls_confirmed_model_wf") %>% 
-#  select_best(metric = "rmse")
-pls_param <- pls_model %>%
-  parameters() %>%
-  update(predictor_prop = predictor_prop(c(0.6095881-0.05, 0.6095881+0.05)),
-         num_comp = num_comp(c(2-1, 2+3)))
-  
-# After that, we add them to the workflow
-workflow_tune_confirmed <- workflow_tune_confirmed %>%
-  option_add(param_info = ridge_param, id = "linear_reg_confirmed_ridge_wf") %>%
-  option_add(param_info = lasso_param, id = "linear_reg_confirmed_lasso_wf") %>%
-  option_add(param_info = en_param, id = "linear_reg_confirmed_elastic_net_wf") %>%
-  option_add(param_info = pls_param, id = "pls_confirmed_model_wf")
-```
-
-```{r, eval=F}
 # And we tune again our models:
 # DEATHS
 cl <- makePSOCKcluster(8)
@@ -1010,8 +926,62 @@ workflow_results_deaths_tuned <- workflow_tune_deaths %>%
 
 stopCluster(cl)
 
-# saveRDS(workflow_results_deaths_tuned, "workflow_results_deaths_tuned.RDS")
+# i	No tuning parameters. `fit_resamples()` will be attempted
+# i 1 of 5 resampling: linear_reg_deaths_lm_wf
+# v 1 of 5 resampling: linear_reg_deaths_lm_wf (10s)
+# i 2 of 5 tuning:     linear_reg_deaths_ridge_wf
+# v 2 of 5 tuning:     linear_reg_deaths_ridge_wf (3s)
+# i 3 of 5 tuning:     linear_reg_deaths_lasso_wf
+# v 3 of 5 tuning:     linear_reg_deaths_lasso_wf (2.6s)
+# i 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf
+# v 4 of 5 tuning:     linear_reg_deaths_elastic_net_wf (1m 6.7s)
+# i 5 of 5 tuning:     pls_deaths_model_wf
+# v 5 of 5 tuning:     pls_deaths_model_wf (1m 10.8s)
 
+# saveRDS(workflow_results_deaths_tuned, "workflow_results_deaths_tuned.RDS")
+```
+
+
+```{r}
+# Updating the set of tuning parameters for CONFIRMED
+# With the commented lines, we get the current best parameter, and we make a grid
+# around them
+# workflow_results_confirmed %>% 
+#   pull_workflow_set_result("linear_reg_confirmed_ridge_wf") %>% 
+#   select_best(metric = "rmse") 
+ridge_param <- ridge_model %>%
+  parameters() %>%
+  update(penalty = penalty(c(1.538034e-10-1e-10, 1.538034e-10+1e-10)))
+# workflow_results_confirmed %>% 
+#   pull_workflow_set_result("linear_reg_confirmed_lasso_wf") %>% 
+#   select_best(metric = "rmse")
+lasso_param <- lasso_model %>%
+  parameters() %>%
+  update(penalty = penalty(c(1.538034e-10-1e-10, 1.538034e-10+1e-10)))
+# workflow_results_confirmed %>% 
+#  pull_workflow_set_result("linear_reg_confirmed_elastic_net_wf") %>% 
+#  select_best(metric = "rmse")
+en_param <- elastic_net_model %>%
+  parameters() %>%
+  update(penalty = penalty(c(5.159664e-08-1e-8, 5.159664e-08+1e-8)),
+         mixture = mixture(c(0.05609091-0.01, 0.05609091+0.01)))
+# workflow_results_confirmed %>% 
+#  pull_workflow_set_result("pls_confirmed_model_wf") %>% 
+#  select_best(metric = "rmse")
+pls_param <- pls_model %>%
+  parameters() %>%
+  update(predictor_prop = predictor_prop(c(0.6095881-0.05, 0.6095881+0.05)),
+         num_comp = num_comp(c(2-1, 2+3)))
+  
+# After that, we add them to the workflow
+workflow_tune_confirmed <- workflow_tune_confirmed %>%
+  option_add(param_info = ridge_param, id = "linear_reg_confirmed_ridge_wf") %>%
+  option_add(param_info = lasso_param, id = "linear_reg_confirmed_lasso_wf") %>%
+  option_add(param_info = en_param, id = "linear_reg_confirmed_elastic_net_wf") %>%
+  option_add(param_info = pls_param, id = "pls_confirmed_model_wf")
+```
+
+```{r, eval=F}
 # CONFIRMED
 cl <- makePSOCKcluster(8)
 registerDoParallel(cl)
@@ -1030,6 +1000,18 @@ workflow_results_confirmed_tuned <- workflow_tune_confirmed %>%
     control = grid_ctrl,
     verbose = T
    )
+
+# i	No tuning parameters. `fit_resamples()` will be attempted
+# i 1 of 5 resampling: linear_reg_confirmed_lm_wf
+# v 1 of 5 resampling: linear_reg_confirmed_lm_wf (9.2s)
+# i 2 of 5 tuning:     linear_reg_confirmed_ridge_wf
+# v 2 of 5 tuning:     linear_reg_confirmed_ridge_wf (3.2s)
+# i 3 of 5 tuning:     linear_reg_confirmed_lasso_wf
+# v 3 of 5 tuning:     linear_reg_confirmed_lasso_wf (2.3s)
+# i 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf
+# v 4 of 5 tuning:     linear_reg_confirmed_elastic_net_wf (1m 4.3s)
+# i 5 of 5 tuning:     pls_confirmed_model_wf
+# v 5 of 5 tuning:     pls_confirmed_model_wf (1m 8.5s)
 
 stopCluster(cl)
 
@@ -1054,6 +1036,10 @@ workflow_results_confirmed_tuned <- readRDS("workflow_results_confirmed_tuned.RD
 # workflow_results_confirmed_tuned %>%
 #   rank_results(select_best = T) %>%
 #   filter(.metric == "rsq")
+
+workflow_results_deaths_tuned <-
+  as_workflow_set(linear_reg_deaths_rlm_wf = rlm_deaths_resamples) %>%
+  bind_rows(workflow_results_deaths_tuned)
 
 
 autoplot(workflow_results_deaths_tuned, select_best = T) +
