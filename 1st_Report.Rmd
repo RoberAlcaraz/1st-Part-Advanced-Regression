@@ -650,10 +650,12 @@ After defining all these steps, we are able to start creating our models. In the
 # MODEL TUNING AND VALIDATION
 
 \bigskip
-As we have said in the previous section, we are going to try 5 different models:
+As we have said in the previous section, we are going to try 6 different models:
 \bigskip
 
-- A simple linear model (`lm`),
+- Simple and robust linear models (`lm` and `rlm``). Since the robust linear model
+is not implemented in the `parsnip` package, it has been created. In the script
+`rlm.R` there is the implementation of the model.
 
 - Three different models from the `glmnet` package: ridge, lasso and elastic net
 regression. The difference between these three models is the parameter tuning. We
@@ -695,7 +697,7 @@ pls_model <-
   set_mode('regression')
 ```
 
-```{r}
+```{r, eval=F}
 # Now, we can start by defining the robust linear model.
 # There is some problems with doing parallel processing 
 # with new models. Therefore, we will fit it before.
@@ -708,6 +710,12 @@ rlm_model <-
 
 r_linear_reg_rec_deaths <- 
   basic_rec_deaths %>%
+  step_dummy(all_nominal_predictors()) %>% # get dummy variables
+  step_nzv(all_numeric_predictors(), freq_cut = 65/5) %>% # remove the zero variance variables
+  step_corr(all_numeric_predictors(), threshold = 0.65) # decorrelate predictors
+
+r_linear_reg_rec_confirmed <- 
+  basic_rec_confirmed %>%
   step_dummy(all_nominal_predictors()) %>% # get dummy variables
   step_nzv(all_numeric_predictors(), freq_cut = 65/5) %>% # remove the zero variance variables
   step_corr(all_numeric_predictors(), threshold = 0.65) # decorrelate predictors
@@ -744,7 +752,9 @@ rlm_confirmed_resamples <-
 
 
 \bigskip
-Thanks to the `workflowsets` package [@workflowsets], we can create two sets of **workflows** (pipelines in python), one for the deaths model and the other for the confirmed cases. A workflow is an object which is formed by a recipe and a model. 
+Thanks to the `workflowsets` package [@workflowsets], we can create two sets of
+**workflows** (pipelines in python), one for the deaths model and the other for 
+the confirmed cases. A workflow is an object which is formed by a recipe and a model. 
 
 ```{r}
 # Deaths
@@ -787,8 +797,13 @@ workflow_tune_confirmed <- workflow_tune_confirmed %>%
 ```
 
 
-After defining these models, it is time to tune their parameters. With the R package `doParallel` [@doParallel], we are able to select the number of cores in order to decrease the computational time. In my computer, using 8 cores instead of 4 decreases more than half the computational time, which helps a lot. Next, we modify the intervals of the model parameters, and we will select the set of them that 
-minimizes the root mean square error (`rmse`) and the ordinal r-square (`rsq`). Below, we can see the results for the deaths model:
+After defining these models, it is time to tune their parameters. With the R package
+`doParallel` [@doParallel], we are able to select the number of cores in order to
+decrease the computational time. In my computer, using 8 cores instead of 4 decreases
+more than half the computational time, which helps a lot. Next, we modify the intervals
+of the model parameters, and we will select the set of them that minimizes the root
+mean square error (`rmse`) and the ordinal r-square (`rsq`). Below, we can see the
+results for the deaths model:
 
 
 ```{r, eval=F}
@@ -1018,10 +1033,24 @@ stopCluster(cl)
 # saveRDS(workflow_results_confirmed_tuned, "workflow_results_confirmed_tuned.RDS")
 ```
 
+```{r, eval=F}
+# Finally, we add the rlm workflow to the original:
+
+workflow_results_deaths_tuned <-
+  as_workflow_set(linear_reg_deaths_rlm_wf = rlm_deaths_resamples) %>%
+  bind_rows(workflow_results_deaths_tuned)
+
+workflow_results_confirmed_tuned <-
+  as_workflow_set(linear_reg_confirmed_rlm_wf = rlm_confirmed_resamples) %>%
+  bind_rows(workflow_results_confirmed_tuned)
+
+# saveRDS(workflow_results_deaths_tuned, "workflow_results_deaths_tuned.RDS")
+# saveRDS(workflow_results_confirmed_tuned, "workflow_results_confirmed_tuned.RDS")
+```
+
+
 ```{r}
-workflow_results_deaths <- readRDS("workflow_results_deaths.RDS")
 workflow_results_deaths_tuned <- readRDS("workflow_results_deaths_tuned.RDS")
-workflow_results_confirmed <- readRDS("workflow_results_confirmed.RDS")
 workflow_results_confirmed_tuned <- readRDS("workflow_results_confirmed_tuned.RDS")
 ```
 
@@ -1037,11 +1066,6 @@ workflow_results_confirmed_tuned <- readRDS("workflow_results_confirmed_tuned.RD
 #   rank_results(select_best = T) %>%
 #   filter(.metric == "rsq")
 
-workflow_results_deaths_tuned <-
-  as_workflow_set(linear_reg_deaths_rlm_wf = rlm_deaths_resamples) %>%
-  bind_rows(workflow_results_deaths_tuned)
-
-
 autoplot(workflow_results_deaths_tuned, select_best = T) +
   ggtitle("Results for the deaths model") +
   theme(plot.title = element_text(hjust = 0.5, size = 20)) +
@@ -1049,7 +1073,12 @@ autoplot(workflow_results_deaths_tuned, select_best = T) +
   theme_tq()
 ```
 
-As we can observe above, there is a big difference between the partial least squares model and the rest. In the same way, as we can see for the models of confirmed cases, the one with the best metrics is the partial least squares, but for the next one, for instance, although the lasso model is the last one in `rmse`, it is the second in `rsq`
+As we can observe above, there is a big difference between the partial least squares
+model and the rest. The mean for the RMSE is around 100, i.e., the mean error is
+around 100 deaths, and the RSE is around 0.9. Both of these metrics have a very 
+good results. In the same way, as we can see for the models of confirmed cases,
+the one with the best metrics is also the partial least squares, which its RMSE
+is below 10000 and the RSE is again close to 0.9.
 
 
 ```{r, fig.cap="Results for the confirmed cases models"}
@@ -1062,7 +1091,12 @@ autoplot(workflow_results_confirmed_tuned, select_best = T) +
 
 # MODEL SELECTION AND CONCLUSIONS 
 
-As we have seen in the previous chapter, the best model for both cases is the **Partial Least Squares (PLS) regression**. As we briefly described before, it is a statistical method that is related with the principal components regression. It reduces the predictors to a smaller set of uncorrelated components and perform least squares regression with these components instead of using the original data. For both models, we can observe the final parameters:
+As we have seen in the previous chapter, the best model for both cases is the 
+**Partial Least Squares (PLS) regression**. As we briefly described before, it is
+a statistical method that is related with the principal components regression. It
+reduces the predictors to a smaller set of uncorrelated components and perform 
+least squares regression with these components instead of using the original data.
+For both models, we can observe the final parameters:
 
 
 |  **Model**    |`predictor_prop`|`num_comp`|
@@ -1072,9 +1106,15 @@ As we have seen in the previous chapter, the best model for both cases is the **
 :Final set of parameters for each model
 
 
-The first parameter, `predictor_prop`, indicates the proportion of variables that are used in every PLS component. Since we have 24 predictors after the preprocessing, 4 and 13 variables are used on each of the sPLS components. The second parameter indicates the number of PLS components that are used as predictors in each model.
+The first parameter, `predictor_prop`, indicates the proportion of variables that
+are used in every PLS component. Since we have 24 predictors after the preprocessing,
+4 and 13 variables are used on each of the sPLS components. The second parameter 
+indicates the number of PLS components that are used as predictors in each model.
 
-Consecutively, we have to *finalize* the workflows, i.e., we have to give the best set of parameters to each model. And now, we are able to fit the model **in all the training set**, since the previous folds were used only to get these parameters.
+Consecutively, we have to *finalize* the workflows, i.e., we have to give the best
+set of parameters to each model. And now, we are able to fit the model 
+**in all the training set**, since the previous folds were used only to get these
+parameters.
 
 
 ```{r}
@@ -1115,14 +1155,18 @@ After fitting the models, in order to see some characteristics of them, we can p
 a *Correlation Circle Plot*, which represents the two components and projects the 
 variables in the plane defined by them. Strongly associated or correlated variables
 are plotted in the same direction. The greater the distance from the origin the 
-stronger the association. For the deaths model, we can observe two main groups that
-are very correlated with the outcome, however, for the confirmed model, some variables
-appear in the center of the model, i.e., they are not so correlated. 
+stronger the association. For the deaths model, we can observe two main groups whose
+variables are very correlated with the outcome. 
 
 ```{r, fig.cap="Correlation Circle Plot for the deaths model"}
 plotVar(best_fit_deaths$fit$fit$fit)
 ```
 
+
+After analyzing the characteristics of the best models, we are going to see the 
+predictive power of the models in the training and testing sets. Below we can
+observe the difference between the observed and predicted values for both variables
+deaths and confirmed cases per week:
 
 ```{r}
 pred_train_deaths <- best_fit_deaths %>%
@@ -1160,6 +1204,14 @@ ggarrange(p1, p2) +
   theme(plot.title = element_text(hjust = 0.5, size = 20))
 ```
 
+Even though the predictions are very similar to the real values, we cannot reach
+the peaks of deaths that appear in April or February, and the peak of confirmed 
+cases of February. This happen because we want to predict the following three weeks,
+so we are considering 3 lagged variables. If we wanted to predict only the next 
+week, we would consider the value of deaths and confirmed cases of the day before,
+so we would have a much more accurate model.
+
+In the testing set we have the following results:
 ```{r}
 pred_test_deaths <- best_fit_deaths %>%
   predict(new_data = spain_new_data)
@@ -1167,20 +1219,20 @@ pred_test_deaths <- best_fit_deaths %>%
 pred_test_confirmed <- best_fit_confirmed %>%
   predict(new_data = spain_new_data)
 
-spain_new_data %>%
+results <- spain_new_data %>%
   mutate(
     predicted_deaths = pred_test_deaths$.pred,
     predicted_confirmed = pred_test_confirmed$.pred
   ) %>%
   dplyr::select(date, deaths_week, predicted_deaths, confirmed_week, predicted_confirmed) %>%
   summarise(
-    date = date,
-    deaths_week = deaths_week, 
-    predicted_deaths = predicted_deaths,
-    difference_deaths = abs(deaths_week - predicted_deaths),
-    confirmed_week = confirmed_week, 
-    predicted_confirmed = predicted_confirmed,
-    difference_confirmed = abs(confirmed_week - predicted_confirmed)
+    Date = date,
+    Deaths = deaths_week, 
+    `Predicted Deaths` = predicted_deaths,
+    `Difference Deaths` = abs(deaths_week - predicted_deaths),
+    Confirmed = confirmed_week, 
+    `Predicted Confirmed` = predicted_confirmed,
+    `Difference Confirmed` = abs(confirmed_week - predicted_confirmed)
   )
 ```
 
