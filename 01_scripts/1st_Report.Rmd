@@ -28,6 +28,17 @@ bibliography: references.bib
 ```
 \newpage
 
+```{r include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, 
+                      echo = F, 
+                      message = FALSE,
+                      eval = T,
+                      fig.pos="H", 
+                      fig.align="center",
+                      fig.width=11,
+                      cache=FALSE, error = TRUE)
+```
+
 ```{r, echo = F}
 # Model packages
 pacman::p_load(ranger, mixOmics, plsmod)
@@ -48,16 +59,7 @@ theme_set(theme_tq())
 # saveRDS(spain_new_data, "00_data/spain_new_data.RDS")
 ```
 
-```{r include=FALSE}
-knitr::opts_chunk$set(warning = FALSE, 
-                      echo = F, 
-                      message = FALSE,
-                      eval = T,
-                      fig.pos="H", 
-                      fig.align="center",
-                      fig.width=11,
-                      cache=FALSE, error = TRUE)
-```
+
 
 # INTRODUCTION
 
@@ -653,7 +655,7 @@ After defining all these steps, we are able to start creating our models. In the
 As we have said in the previous section, we are going to try 6 different models:
 \bigskip
 
-- Simple and robust linear models (`lm` and `rlm``). Since the robust linear model
+- Simple and robust linear models (`lm` and `rlm`). Since the robust linear model
 is not implemented in the `parsnip` package, it has been created. In the script
 `rlm.R` there is the implementation of the model.
 
@@ -918,7 +920,7 @@ workflow_tune_deaths <- workflow_tune_deaths %>%
   option_add(param_info = pls_param, id = "pls_deaths_model_wf")
 ```
 
-```{r}
+```{r, eval=F}
 # And we tune again our models:
 # DEATHS
 cl <- makePSOCKcluster(8)
@@ -939,7 +941,6 @@ workflow_results_deaths_tuned <- workflow_tune_deaths %>%
     verbose = T
    )
 
-stopCluster(cl)
 
 # i	No tuning parameters. `fit_resamples()` will be attempted
 # i 1 of 5 resampling: linear_reg_deaths_lm_wf
@@ -1158,7 +1159,7 @@ are plotted in the same direction. The greater the distance from the origin the
 stronger the association. For the deaths model, we can observe two main groups whose
 variables are very correlated with the outcome. 
 
-```{r, fig.cap="Correlation Circle Plot for the deaths model"}
+```{r, fig.width=9, fig.cap="Correlation Circle Plot for the deaths model"}
 plotVar(best_fit_deaths$fit$fit$fit)
 ```
 
@@ -1168,7 +1169,7 @@ predictive power of the models in the training and testing sets. Below we can
 observe the difference between the observed and predicted values for both variables
 deaths and confirmed cases per week:
 
-```{r}
+```{r, fig.width=9}
 pred_train_deaths <- best_fit_deaths %>%
   predict(new_data = spain)
 
@@ -1228,12 +1229,14 @@ results <- spain_new_data %>%
   summarise(
     Date = date,
     Deaths = deaths_week, 
-    `Predicted Deaths` = predicted_deaths,
-    `Difference Deaths` = abs(deaths_week - predicted_deaths),
+    `Predicted Deaths` = round(predicted_deaths, digits = 0),
+    `Difference Deaths` = abs(Deaths - `Predicted Deaths`),
     Confirmed = confirmed_week, 
-    `Predicted Confirmed` = predicted_confirmed,
-    `Difference Confirmed` = abs(confirmed_week - predicted_confirmed)
+    `Predicted Confirmed` = round(predicted_confirmed, digits = 0),
+    `Difference Confirmed` = abs(Confirmed - `Predicted Confirmed`)
   )
+
+knitr::kable(results, caption = "Results in the testing set")
 ```
 
 \newpage
