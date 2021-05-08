@@ -83,8 +83,8 @@ the models. Finally, in the last section, we will select the best model and say
 some conclusions.
 
 ```{r}
-spain <- readRDS("00_data/spain.RDS")
-spain_new_data <- readRDS("00_data/spain_new_data.RDS")
+spain <- readRDS("../00_data/spain.RDS")
+spain_new_data <- readRDS("../00_data/spain_new_data.RDS")
 ```
 
 \bigskip
@@ -1051,8 +1051,8 @@ workflow_results_confirmed_tuned <-
 
 
 ```{r}
-workflow_results_deaths_tuned <- readRDS("workflow_results_deaths_tuned.RDS")
-workflow_results_confirmed_tuned <- readRDS("workflow_results_confirmed_tuned.RDS")
+workflow_results_deaths_tuned <- readRDS("../02_results/workflow_results_deaths_tuned.RDS")
+workflow_results_confirmed_tuned <- readRDS("../02_results/workflow_results_confirmed_tuned.RDS")
 ```
 
 
