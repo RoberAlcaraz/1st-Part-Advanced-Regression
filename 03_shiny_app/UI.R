@@ -16,7 +16,7 @@ introPanel <- tabPanel(
   sidebarLayout(
     # position = "right",
     sidebarPanel(
-      h3(
+      h4(
         strong("Description of the variables: ")),
       HTML(paste0("<ul><li>",  
                   code("date"), ": Observation date. </li><li>", 
@@ -33,7 +33,7 @@ introPanel <- tabPanel(
            )
       ),
     mainPanel(
-      h4(em("Roberto J. Alcaraz Molina")),
+      h4("By:", em("Roberto J. Alcaraz Molina")),
       h4(em("09/05/2021")),
       br(),
       h1(strong("Introduction")),
@@ -53,12 +53,28 @@ introPanel <- tabPanel(
   )
 )
 
-
+dataPanel <- wellPanel(
+  shiny::selectInput("data", "Select the variables to be shown: ",
+                     choices = colnames(spain), multiple = T, 
+                     selected = c("date", "deaths", "confirmed")),
+  dataTableOutput("dataset")
+)
 edaPanel <- tabPanel(
   "2. EDA",
   sidebarLayout(
-    # position = "right",
     sidebarPanel(
+      h4(strong("Exploratory Data Analysis: ")),
+      br(),
+      p("In this section we can observe three different panels: "),
+      p("- In the first one, we can select some variables of our data set, filter the 
+        rows, look for some specific value or show more entries."),
+      p("- In the next panel, we can see the distribution of our numeric variables:
+        the two main variables, which are cumulative deaths and confirmed cases,
+        and the cumulative vaccines."),
+      p("- Finally, in the third one, we can observe the relationship between the 
+        categorical and the numerical variables"),
+      br(),
+      p("In this two selector, we can choose our variables of interest."),
       shiny::selectInput("numvar", label = "Select the numeric variable:",
                          choices = c("Deaths" = "deaths", 
                                      "Confirmed cases" = "confirmed",
@@ -74,7 +90,7 @@ edaPanel <- tabPanel(
     ),
     mainPanel(
       tabsetPanel(
-        tabPanel("Dataset Description", dataTableOutput("dataset")),
+        tabPanel("Dataset Description", dataPanel),
         tabPanel("Numeric variables", plotlyOutput("numplot")),
         tabPanel("Categorical variables", plotlyOutput("catplot"))
       )
@@ -112,12 +128,14 @@ prepSteps <- wellPanel(
   
 deathsPanel <- wellPanel(
   shiny::selectInput("cols1", label = "Select the columns: ", 
-                     choices = colnames(spain_deaths), multiple = T),
+                     choices = colnames(spain_deaths), multiple = T,
+                     selected = c("date", "deaths_week")),
   dataTableOutput("weekly_data1")
 )
 confPanel <- wellPanel(
   shiny::selectInput("cols2", label = "Select the columns: ", 
-                     choices = colnames(spain_confirmed), multiple = T),
+                     choices = colnames(spain_confirmed), multiple = T, 
+                     selected = c("date", "confirmed_week")),
   dataTableOutput("weekly_data2")
 )
 
@@ -133,13 +151,24 @@ fePanel <- tabPanel(
   )
 )
 
+deathmodPanel <- wellPanel(
+  br(),
+  plotlyOutput("metrics1")
+)
+
+confmodPanel <- wellPanel(
+  br(),
+  plotlyOutput("metrics2")
+)
+
 tunePanel <- tabPanel(
   "4. Model tuning and validation",
   sidebarLayout(
     sidebarPanel(
       h4(strong("Statistical models: ")),
       br(),
-      p("We are going to try 6 different models:"),
+      p("We are going to try 6 different models and in the left we have the mean
+        results of the RMSE (root mean square error) and RSE (R square):"),
       br(),
       p("- Simple and robust linear models (",code("lm")," and ",code("rlm"),")."),
       br(),
@@ -154,24 +183,51 @@ tunePanel <- tabPanel(
         two parameters:  ",code("predictor_prop"),", which is the proportion of predictors
         that are allowed to affect each PLS component, and ",code("num_comp"),", 
         which is the number of PLS components.")
-
-
-      
     ),
     mainPanel(
-      
+      tabsetPanel(
+        tabPanel("Deaths model", deathmodPanel),
+        tabPanel("Confirmed model", confmodPanel)
+      )
     )
   )
+)
+
+plsPanel <- wellPanel(
+  shiny::selectInput("optFit1", label = "Select the model: ",
+                     choices = c("Deaths", "Confirmed")),
+  br(),
+  plotOutput("fit")
+)
+trainPanel <- wellPanel(
+  shiny::selectInput("optFit2", label = "Select the model: ",
+                     choices = c("Deaths", "Confirmed")),
+  plotlyOutput("train")
+)
+testPanel <- wellPanel(
+  br(),
+  dataTableOutput("test")
 )
 
 selPanel <- tabPanel(
   "5. Model selection",
   sidebarLayout(
-    # position = "right",
     sidebarPanel(
+      h4(strong("Model selection: ")),
+      br(),
+      p("As we have seen in the previous chapter, the best model for both cases 
+        is the", strong("Partial Least Squares (PLS) regression."), "As we briefly
+        described before, it is a statistical method that is related with the 
+        principal components regression. It reduces the predictors to a smaller 
+        set of uncorrelated components and perform least squares regression with
+        these components instead of using the original data.")
     ),
     mainPanel(
-      
+      tabsetPanel(
+        tabPanel("PLS results", plsPanel),
+        tabPanel("Training set Predictions", trainPanel),
+        tabPanel("Testing set Predictions", testPanel)
+      )
     )
   )
 )
@@ -197,6 +253,7 @@ ui <- navbarPage("Advanced Regression And Prediction",
                  edaPanel,
                  fePanel,
                  tunePanel,
+                 selPanel,
                  refPanel
 )
 

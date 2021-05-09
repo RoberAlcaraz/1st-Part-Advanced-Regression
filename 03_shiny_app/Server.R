@@ -19,14 +19,23 @@ pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes, emo, thematic
 # saveRDS(spain, "spain.RDS")
 
 spain <- readRDS("../00_data/spain_clean.RDS")
+spain_weekly <- readRDS("../00_data/spain_weekly.RDS")
 spain_deaths <- readRDS("../00_data/spain_deaths.RDS")
 spain_confirmed <- readRDS("../00_data/spain_confirmed.RDS")
+
+workflow_results_deaths_tuned <- readRDS("../02_results/workflow_results_deaths_tuned.RDS")
+workflow_results_confirmed_tuned <- readRDS("../02_results/workflow_results_confirmed_tuned.RDS")
+
+best_fit_deaths <- readRDS("../02_results/best_fit_deaths.RDS")
+best_fit_confirmed <- readRDS("../02_results/best_fit_confirmed.RDS")
+results <- readRDS("../02_results/results.RDS")
+
 
 server <- function(input, output){
   thematic::thematic_shiny()
   
   output$dataset <- renderDataTable(
-    spain, 
+    spain[, input$data], 
     options = list(
       pageLength = 10
     )
@@ -76,5 +85,76 @@ server <- function(input, output){
     )
   )
   
+  output$metrics1 <- renderPlotly({
+    autoplot(workflow_results_deaths_tuned, select_best = T) +
+      ggtitle("Results for the deaths model") +
+      scale_color_tq() +
+      theme_tq()
+  })
+  
+  output$metrics2 <- renderPlotly({
+    autoplot(workflow_results_confirmed_tuned, select_best = T) +
+      ggtitle("Results for the confirmed model") +
+      scale_color_tq() +
+      theme_tq()
+  })
+  
+  output$fit <- renderPlot({
+    if (input$optFit1 == "Deaths"){
+      plotVar(best_fit_deaths$fit$fit$fit)
+    } else if (input$optFit1 == "Confirmed"){
+      plotVar(best_fit_confirmed$fit$fit$fit)
+    }
+  })
+  
+  output$train <- renderPlotly({
+    if (input$optFit2 == "Deaths"){
+      pred_train_deaths <- best_fit_deaths %>%
+        predict(new_data = spain_weekly)
+      
+      p1 <- spain_weekly %>%
+        mutate(predictions = pred_train_deaths$.pred) %>%
+        dplyr::select(date, deaths_week, predictions) %>%
+        pivot_longer(cols = c("deaths_week", "predictions"), values_to = "value", names_to = "Variable") %>%
+        ggplot(aes(x = date, y = value)) +
+        geom_line(aes(color = Variable), size = 1) +
+        scale_color_manual(values = c("darkred", "steelblue")) +
+        labs(
+          y = "Deaths per week",
+          x = "Date"
+        )
+      p1 +
+        ggtitle("Predicted deaths in the training set") +
+        theme(plot.title = element_text(hjust = 0.5, size = 20))
+    } else if (input$optFit2 == "Confirmed") {
+      pred_train_confirmed <- best_fit_confirmed %>%
+        predict(new_data = spain_weekly)
+      
+      p2 <- spain_weekly %>%
+        mutate(predictions = pred_train_confirmed$.pred) %>%
+        dplyr::select(date, confirmed_week, predictions) %>%
+        pivot_longer(cols = c("confirmed_week", "predictions"), values_to = "value", names_to = "Variable") %>%
+        ggplot(aes(x = date, y = value)) +
+        geom_line(aes(color = Variable), size = 1) +
+        scale_color_manual(values = c("darkred", "steelblue")) +
+        labs(
+          y = "Confirmed cases per week",
+          x = "Date"
+        ) 
+      p2 +
+        ggtitle("Predicted confirmed cases in the training set") +
+        theme(plot.title = element_text(hjust = 0.5, size = 20))
+    }
+    
+    
+  })
+  
+  output$test <- renderDataTable(
+    results,
+    options = list(
+      searching = FALSE,
+      paging = FALSE
+    )
+  )
 }
 
