@@ -374,6 +374,8 @@ For the cummulative deaths, we can see it below:
 ```{r}
 spain$stay_home[278:nrow(spain)] <- "recommended"
 spain_new_data$stay_home <- "recommended"
+
+# saveRDS(spain, "../00_data/spain_clean.RDS")
 ```
 
 
@@ -643,6 +645,8 @@ pls_rec_confirmed <-
   step_nzv(all_numeric_predictors(), freq_cut = 65/5) %>% # remove the zero variance variables 
   step_normalize(all_numeric_predictors()) %>% # center and scale
   step_dummy(all_nominal_predictors()) # get dummy variables
+
+# saveRDS(spain, "../00_data/spain_weekly.RDS")
 ```
 
 \bigskip
