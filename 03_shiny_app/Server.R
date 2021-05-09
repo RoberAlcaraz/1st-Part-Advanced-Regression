@@ -8,7 +8,7 @@
 
 # install.packages("pacman")
 pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes, emo, thematic,
-               bslib, plotly)
+               bslib, plotly, tidyquant, mixOmics)
 # devtools::install_github("hadley/emo")
 
 # Today, 17/04/2021, we are going to load the COVID data from Spain. We will 

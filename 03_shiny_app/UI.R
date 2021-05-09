@@ -10,6 +10,18 @@ pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes, emo, shiny.se
                thematic, bslib, plotly)
 # devtools::install_github("hadley/emo")
 
+spain <- readRDS("../00_data/spain_clean.RDS")
+spain_weekly <- readRDS("../00_data/spain_weekly.RDS")
+spain_deaths <- readRDS("../00_data/spain_deaths.RDS")
+spain_confirmed <- readRDS("../00_data/spain_confirmed.RDS")
+
+workflow_results_deaths_tuned <- readRDS("../02_results/workflow_results_deaths_tuned.RDS")
+workflow_results_confirmed_tuned <- readRDS("../02_results/workflow_results_confirmed_tuned.RDS")
+
+best_fit_deaths <- readRDS("../02_results/best_fit_deaths.RDS")
+best_fit_confirmed <- readRDS("../02_results/best_fit_confirmed.RDS")
+results <- readRDS("../02_results/results.RDS")
+
 
 introPanel <- tabPanel(
   "1. Introduction",
@@ -48,7 +60,10 @@ introPanel <- tabPanel(
         results will be done mainly with the", code("tidyverse"), "and ", code("tidymodels"),
         " packages. The first one is well known for R users but the second, even 
         though is still in development, has enough tools for modeling and machine 
-        learning.")
+        learning."),
+      br(),
+      p("All the code with the detailed explanations can be founded in the Rmarkdown
+        of this repository.")
       )
   )
 )
@@ -71,8 +86,14 @@ edaPanel <- tabPanel(
       p("- In the next panel, we can see the distribution of our numeric variables:
         the two main variables, which are cumulative deaths and confirmed cases,
         and the cumulative vaccines."),
-      p("- Finally, in the third one, we can observe the relationship between the 
+      p("- In the third one, we can observe the relationship between the 
         categorical and the numerical variables"),
+      br(),
+      p("Finally, we will aggregate them to have the", 
+        strong("number of deaths and confirmed cases by week"), ". This decision has
+        been taken because there is too much noise in daily data due to different
+        human errors that appears when this data is collected, so taking the data
+        weekly allow us to predict in a better way the future."),
       br(),
       p("In this two selector, we can choose our variables of interest."),
       shiny::selectInput("numvar", label = "Select the numeric variable:",
@@ -220,7 +241,21 @@ selPanel <- tabPanel(
         described before, it is a statistical method that is related with the 
         principal components regression. It reduces the predictors to a smaller 
         set of uncorrelated components and perform least squares regression with
-        these components instead of using the original data.")
+        these components instead of using the original data."),
+      br(),
+      p("After fitting the models, in order to see some characteristics of them, 
+        we can plot a Correlation Circle Plot, which represents the two components
+        and projects the variables in the plane defined by them. Strongly associated
+        or correlated variables are plotted in the same direction."),
+      br(),
+      p("Regarding the predictions in the training set, even though the predictions
+        are very similar to the real values, we cannot reach the peaks of deaths that appear in 
+        April or February, and the peak of confirmed cases of February."),
+      br(),
+      p("In the testing set, our model for predicting the deaths is not doing a 
+        great job, since it is predicting more than double the observed deaths.
+        However, the model for predicting the confirmed cases in Spain has very
+        good results.")
     ),
     mainPanel(
       tabsetPanel(
@@ -248,7 +283,7 @@ refPanel <- tabPanel(
 )
 
 ui <- navbarPage("Advanced Regression And Prediction",
-                 theme = bslib::bs_theme(bootswatch = "litera"),
+                 theme = bslib::bs_theme(bootswatch = "sandstone"),
                  introPanel,
                  edaPanel,
                  fePanel,
