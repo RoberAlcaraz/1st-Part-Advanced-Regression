@@ -6,7 +6,8 @@
 # UI FUNCTION
 ################################################################################
 
-pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes, emo, shiny.semantic)
+pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes, emo, shiny.semantic,
+               thematic, bslib, plotly)
 # devtools::install_github("hadley/emo")
 
 
@@ -83,20 +84,51 @@ edaPanel <- tabPanel(
 )
 
 
-prepSteps <- 
-  h4(
-    strong("Preprocessing steps: ")
-    )
+prepSteps <- wellPanel(
+  h4(strong("Preprocessing steps: ")),
+  br(),
+  p(strong("1."), " Divide the date in month and year and convert it to categorical, because they could"),
+  p("be very important for the outcomes."),
+  br(),
+  p(strong("2."), " We will create some new variables which will be the deaths and confirmed cases 3"), 
+  p("weeks lagged, i.e., we will consider in our model what happened in the previous weeks"), 
+  p("to be able to predict in a better way the next month."),
+  br(),
+  p(strong("3."), " We have 12 covariates which the majority of them are categorical, so we must do "),
+  p(strong("feature selection"), ". This time we will use recursive feature elimination, selecting"),
+  p("the features that are above the 20% of importance using a random forest model."),
+  br(),
+  p(strong("4."), " Even though we will test our data with the next 3 weeks, we should divide our "),
+  p("training data into folds to tune the model parameters and to compare the model results."),
+  p("Then, we can divide our training set into different folds by date, which is very useful"),
+  p("for time series models."),
+  br(),
+  p(strong("5."), " For the linear regression models, the recommended preprocessing is to remove the"),
+  p("zero variance variables, decorrelate the predictors and create dummy variables for "),
+  p("the categorical predictors; and for the partial least squares (PLS), we need to "),
+  p("normalize the predictors.")
+  
+)
+  
+deathsPanel <- wellPanel(
+  shiny::selectInput("cols1", label = "Select the columns: ", 
+                     choices = colnames(spain_deaths), multiple = T),
+  dataTableOutput("weekly_data1")
+)
+confPanel <- wellPanel(
+  shiny::selectInput("cols2", label = "Select the columns: ", 
+                     choices = colnames(spain_confirmed), multiple = T),
+  dataTableOutput("weekly_data2")
+)
+
 
 fePanel <- tabPanel(
   "3. Feature Engineering",
   shiny::splitLayout(
     prepSteps,
-    wellPanel(
-      shiny::selectInput("cols", label = "Select the columns: ", 
-                         choices = colnames(spain_weekly)),
-      p("On the other hand, there is the quantity of vehicles on sale in each state: "),
-      dataTableOutput("weekly_data")
+    tabsetPanel(
+      tabPanel("Deaths data set", deathsPanel),
+      tabPanel("Confirmed data set", confPanel)
     )
   )
 )

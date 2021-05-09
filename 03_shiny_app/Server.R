@@ -19,7 +19,8 @@ pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes, emo, thematic
 # saveRDS(spain, "spain.RDS")
 
 spain <- readRDS("../00_data/spain_clean.RDS")
-spain_weekly <- readRDS("../00_data/spain_weekly.RDS")
+spain_deaths <- readRDS("../00_data/spain_deaths.RDS")
+spain_confirmed <- readRDS("../00_data/spain_confirmed.RDS")
 
 server <- function(input, output){
   thematic::thematic_shiny()
@@ -61,8 +62,15 @@ server <- function(input, output){
       theme(plot.title = element_text(hjust = 0.5, size = 20))
   })
   
-  output$weekly_data <- renderDataTable(
-    spain_weekly[, ],
+  output$weekly_data1 <- renderDataTable(
+    spain_deaths[, input$cols1],
+    options = list(
+      pageLength = 10
+    )
+  )
+  
+  output$weekly_data2 <- renderDataTable(
+    spain_confirmed[, input$cols2],
     options = list(
       pageLength = 10
     )
