@@ -570,7 +570,7 @@ spain_confirmed <- spain_confirmed%>%
 
 
 4. Even though we will **test** our data with the next 3 weeks, we should divide
-our training data into folds to tune the model parameters and to compare them. To
+our training data into folds to tune the model parameters and to compare the model results. To
 do that, there is a function called `rolling_origin` from the `rsample` package
 (from `tidymodels`) which can divide our training set into different folds by date,
 which is very useful for time series models. We will get 10 folds where the analysis
@@ -603,7 +603,7 @@ spain_rolling_confirmed <- rolling_origin(
 ```
 
 5. Finally, it is time to use the `recipes` package [@recipes] to do the preprocessing
-steps that the models need. For the linear regression models (`lm`, `ridge`, `lasso` and `elastic net`), the recommended preprocessing is to remove the zero variance variables, decorrelate the predictors and create dummy variables for the categorical predictors; and for the partial least squares (PLS), we need to normalize the predictors, i.e., transform them to have mean equal to 0 and variance equal to 1.
+steps that the models need. For the linear regression models (`lm`, `rlm`, `ridge`, `lasso` and `elastic net`), the recommended preprocessing is to remove the zero variance variables, decorrelate the predictors and create dummy variables for the categorical predictors; and for the partial least squares (PLS), we need to normalize the predictors, i.e., transform them to have mean equal to 0 and variance equal to 1.
 
 ```{r}
 # Recipes for the deaths model
@@ -646,7 +646,8 @@ pls_rec_confirmed <-
   step_normalize(all_numeric_predictors()) %>% # center and scale
   step_dummy(all_nominal_predictors()) # get dummy variables
 
-# saveRDS(spain, "../00_data/spain_weekly.RDS")
+# saveRDS(spain_deaths, "../00_data/spain_deaths.RDS")
+# saveRDS(spain_confirmed, "../00_data/spain_confirmed.RDS")
 ```
 
 \bigskip
