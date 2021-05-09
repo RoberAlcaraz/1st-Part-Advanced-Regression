@@ -133,8 +133,39 @@ fePanel <- tabPanel(
   )
 )
 
-newPanel <- tabPanel(
-  "1. Introduction",
+tunePanel <- tabPanel(
+  "4. Model tuning and validation",
+  sidebarLayout(
+    sidebarPanel(
+      h4(strong("Statistical models: ")),
+      br(),
+      p("We are going to try 6 different models:"),
+      br(),
+      p("- Simple and robust linear models (",code("lm")," and ",code("rlm"),")."),
+      br(),
+      p("- Three different models from the ",code("glmnet")," package: ridge, lasso
+        and elastic net regression, whose difference between them is the parameter 
+        tuning. We have two parameters to tune: ",code("penalty")," and ",code("mixture"),".
+        When ",code("mixture = 0"),", we get a ridge model but when ",code("mixture = 1"),"
+        we get a lasso model. If we decide to tune also the ",code("mixture")," parameter,
+        then we get a elastic net model."),
+      br(),
+      p("- A partial least squares model (",code("PLS"),"), when we have to tune 
+        two parameters:  ",code("predictor_prop"),", which is the proportion of predictors
+        that are allowed to affect each PLS component, and ",code("num_comp"),", 
+        which is the number of PLS components.")
+
+
+      
+    ),
+    mainPanel(
+      
+    )
+  )
+)
+
+selPanel <- tabPanel(
+  "5. Model selection",
   sidebarLayout(
     # position = "right",
     sidebarPanel(
@@ -165,6 +196,7 @@ ui <- navbarPage("Advanced Regression And Prediction",
                  introPanel,
                  edaPanel,
                  fePanel,
+                 tunePanel,
                  refPanel
 )
 
