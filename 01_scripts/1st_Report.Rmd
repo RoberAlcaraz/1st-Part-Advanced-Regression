@@ -1095,6 +1095,7 @@ autoplot(workflow_results_confirmed_tuned, select_best = T) +
   theme_tq()
 ```
 
+\bigskip
 # MODEL SELECTION AND CONCLUSIONS 
 
 As we have seen in the previous chapter, the best model for both cases is the 
@@ -1112,6 +1113,7 @@ For both models, we can observe the final parameters:
 :Final set of parameters for each model
 
 
+\bigskip
 The first parameter, `predictor_prop`, indicates the proportion of variables that
 are used in every PLS component. Since we have 24 predictors after the preprocessing,
 4 and 13 variables are used on each of the sPLS components. The second parameter 
@@ -1155,6 +1157,9 @@ best_fit_deaths <- best_workflow_deaths %>%
 
 best_fit_confirmed <- best_workflow_confirmed %>%
   fit(spain)
+
+# saveRDS(best_fit_deaths, "../02_results/best_fit_deaths.RDS")
+# saveRDS(best_fit_confirmed, "../02_results/best_fit_confirmed.RDS")
 ```
 
 After fitting the models, in order to see some characteristics of them, we can plot
@@ -1164,7 +1169,7 @@ are plotted in the same direction. The greater the distance from the origin the
 stronger the association. For the deaths model, we can observe two main groups whose
 variables are very correlated with the outcome. 
 
-```{r, fig.width=9, fig.cap="Correlation Circle Plot for the deaths model"}
+```{r, fig.width=8, fig.cap="Correlation Circle Plot for the deaths model"}
 plotVar(best_fit_deaths$fit$fit$fit)
 ```
 
@@ -1174,7 +1179,9 @@ predictive power of the models in the training and testing sets. Below we can
 observe the difference between the observed and predicted values for both variables
 deaths and confirmed cases per week:
 
-```{r, fig.width=9}
+```{r, fig.width=8, fig.cap="Results in the training set of both models: deaths (left) and confirmed cases (right)"}
+# saveRDS(spain, "../00_data/spain_weekly.RDS")
+
 pred_train_deaths <- best_fit_deaths %>%
   predict(new_data = spain)
 
@@ -1206,10 +1213,12 @@ p2 <- spain %>%
   ) 
 
 ggarrange(p1, p2) +
-  ggtitle("Results in the train set for both models") +
+  ggtitle("Results in the training set of both models") +
   theme(plot.title = element_text(hjust = 0.5, size = 20))
 ```
 
+
+\bigskip
 Even though the predictions are very similar to the real values, we cannot reach
 the peaks of deaths that appear in April or February, and the peak of confirmed 
 cases of February. This happen because we want to predict the following three weeks,
@@ -1234,15 +1243,35 @@ results <- spain_new_data %>%
   summarise(
     Date = date,
     Deaths = deaths_week, 
-    `Predicted Deaths` = round(predicted_deaths, digits = 0),
-    `Difference Deaths` = abs(Deaths - `Predicted Deaths`),
+    `Pred. Deaths` = round(predicted_deaths, digits = 0),
+    `Dif. Deaths` = Deaths - `Pred. Deaths`,
     Confirmed = confirmed_week, 
-    `Predicted Confirmed` = round(predicted_confirmed, digits = 0),
-    `Difference Confirmed` = abs(Confirmed - `Predicted Confirmed`)
+    `Pred. Confirmed` = round(predicted_confirmed, digits = 0),
+    `Dif. Confirmed` = Confirmed - `Pred. Confirmed`
   )
 
+# saveRDS(results, "../02_results/results.RDS")
 knitr::kable(results, caption = "Results in the testing set")
 ```
+
+As we can observe, our model for predicting the deaths is not doing a great job,
+since it is predicting more than double the observed deaths, so we must think about
+maybe computing one different model for each time step, or doing a recursive time
+series model, i.e., using the prediction of one day to predict the following.
+
+On the other hand, the model for predicting the confirmed cases in Spain has very
+good results. The difference between the observed and the predicted values is around
+6000 confirmed cases, which is only an error of around 30%. Besides, if we consider
+the sum of these three weeks, there has been 63667 new confirmed cases in Spain and
+our model has predicted 68997, so we have only a difference of 5000 cases in a period
+of three weeks, so it is a great results.
+
+In a conclusion, we have realized that only with 60 weeks is very difficult to obtain
+great models and, even though the second model is very good, both can be improved.
+In the following step of the project, we will see other strategies to improve them
+as well as new more powerful machine learning models to get better results.
+
+
 
 \newpage
 # REFERENCES
