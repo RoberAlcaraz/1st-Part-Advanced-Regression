@@ -17,16 +17,11 @@ introPanel <- tabPanel(
     sidebarPanel(
       h3(
         strong("Description of the variables: ")),
-      HTML(paste0("<ul><li>", 
-                  code("id"), ": Unique identifier. </li><li>", 
+      HTML(paste0("<ul><li>",  
                   code("date"), ": Observation date. </li><li>", 
                   code("deaths"), ": Cumulative number of deaths. </li><li>", 
-                  code("test"), ": Cumulative number of test.</li><li>", 
                   code("confirmed"), ": Cumulative number of confirmed cases. </li><li>", 
                   code("vaccines"), ": Cumulative number of doses administered (single dose). </li><li>", 
-                  code("hosp"), ": Number of hospitalized patients on date. </li><li>", 
-                  code("icu"), ": Number of hospitalized patients in ICUs on date. </li><li>", 
-                  code("population"), ": Total population. </li><li>", 
                   code("stay_home_restrictions"), ": Indicates the measures of staying at home. </li><li>", 
                   code("school_closing"), ": Indicates the measures in education. </li><li>", 
                   code("workplace_closing"), ": Indicates the measures of the workplace. </li><li>", 
@@ -63,10 +58,45 @@ edaPanel <- tabPanel(
   sidebarLayout(
     # position = "right",
     sidebarPanel(
+      shiny::selectInput("numvar", label = "Select the numeric variable:",
+                         choices = c("Deaths" = "deaths", 
+                                     "Confirmed cases" = "confirmed",
+                                     "Vaccines" = "vaccines")),
+      br(),
+      shiny::selectInput("catvar", label = "Select the categorical variable:",
+                         choices = c("School closing" = "school_closing",
+                                     "Workplace closing" = "workplace_closing", 
+                                     "Transport closing" = "transport_closing",
+                                     "Gatherings restrictions" = "gatherings_restrictions",
+                                     "Internal movement restrictions" = "internal_movement_restrictions"))
       
     ),
     mainPanel(
+      tabsetPanel(
+        tabPanel("Dataset Description", dataTableOutput("dataset")),
+        tabPanel("Numeric variables", plotlyOutput("numplot")),
+        tabPanel("Categorical variables", plotlyOutput("catplot"))
+      )
       
+    )
+  )
+)
+
+
+prepSteps <- 
+  h4(
+    strong("Preprocessing steps: ")
+    )
+
+fePanel <- tabPanel(
+  "3. Feature Engineering",
+  shiny::splitLayout(
+    prepSteps,
+    wellPanel(
+      shiny::selectInput("cols", label = "Select the columns: ", 
+                         choices = colnames(spain_weekly)),
+      p("On the other hand, there is the quantity of vehicles on sale in each state: "),
+      dataTableOutput("weekly_data")
     )
   )
 )
@@ -101,6 +131,8 @@ refPanel <- tabPanel(
 ui <- navbarPage("Advanced Regression And Prediction",
                  theme = bslib::bs_theme(bootswatch = "litera"),
                  introPanel,
+                 edaPanel,
+                 fePanel,
                  refPanel
 )
 
