@@ -6,13 +6,14 @@
 # UI FUNCTION
 ################################################################################
 
-pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes, emo)
+pacman::p_load(shiny, tidyverse, tidymodels, COVID19, shinythemes, emo, shiny.semantic)
 # devtools::install_github("hadley/emo")
+
 
 introPanel <- tabPanel(
   "1. Introduction",
   sidebarLayout(
-    position = "right",
+    # position = "right",
     sidebarPanel(
       h3(
         strong("Description of the variables: ")),
@@ -57,6 +58,31 @@ introPanel <- tabPanel(
 )
 
 
+edaPanel <- tabPanel(
+  "2. EDA",
+  sidebarLayout(
+    # position = "right",
+    sidebarPanel(
+      
+    ),
+    mainPanel(
+      
+    )
+  )
+)
+
+newPanel <- tabPanel(
+  "1. Introduction",
+  sidebarLayout(
+    # position = "right",
+    sidebarPanel(
+    ),
+    mainPanel(
+      
+    )
+  )
+)
+
 refPanel <- tabPanel(
   "References",
   mainPanel(
@@ -73,7 +99,7 @@ refPanel <- tabPanel(
 )
 
 ui <- navbarPage("Advanced Regression And Prediction",
-                 theme = shinytheme("sandstone"),
+                 theme = bslib::bs_theme(bootswatch = "litera"),
                  introPanel,
                  refPanel
 )
